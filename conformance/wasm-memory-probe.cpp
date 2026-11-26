@@ -41,7 +41,9 @@ int main(int argc, char **argv) {
     return pipe(reinterpret_cast<int *>(invalid));
   }
   const bool bad_wait = !std::strcmp(argv[2], "bad-wait-pointer");
-  if (bad_wait || !std::strcmp(argv[2], "child")) {
+  const bool rejected = !std::strcmp(argv[2], "rejected");
+  if (bad_wait || rejected || !std::strcmp(argv[2], "child")) {
+    if (rejected && argc != 5) return 2;
     int fds[2];
     if (pipe(fds)) return 2;
     const pid_t pid = fork();
@@ -50,11 +52,19 @@ int main(int argc, char **argv) {
       close(fds[0]);
       if (dup2(fds[1], STDOUT_FILENO) != STDOUT_FILENO) return 2;
       close(fds[1]);
+      if (rejected) {
+        std::printf("NO: rejected-stage-text %s %s\n", argv[3], argv[4]);
+        std::fprintf(stderr, "stage stderr\n");
+        return 1;
+      }
       return try_grow(65536) == 0 ? 3 : 2;
     }
     close(fds[1]);
     char data[16];
-    while (read(fds[0], data, sizeof data) > 0) {}
+    ssize_t size;
+    while ((size = read(fds[0], data, sizeof data)) > 0) {
+      if (rejected && std::fwrite(data, 1, size, stdout) != static_cast<size_t>(size)) return 2;
+    }
     close(fds[0]);
     int status;
     if (waitpid(pid, bad_wait ? reinterpret_cast<int *>(invalid) : &status, 0) != pid) return 2;

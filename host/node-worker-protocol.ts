@@ -1,5 +1,7 @@
+import { failureCodes } from "./diagnostics.js";
+import type { Failure, InstanceDiagnostic } from "./diagnostics.js";
 import { BASELINE_LIMITS } from "./limits.js";
-import type { Failure, GuestResult } from "./replay.js";
+import type { GuestResult } from "./replay.js";
 
 export type NodeWorkerRequest = Readonly<{
   schema: 1;
@@ -7,16 +9,19 @@ export type NodeWorkerRequest = Readonly<{
   module: WebAssembly.Module;
   argv: readonly string[];
   workingDirectory: string;
+  diagnostics?: true;
 }>;
 
-export type NodeWorkerReply = Readonly<{ schema: 1; requestId: number; result: GuestResult }>;
+export type NodeWorkerReply = Readonly<{
+  schema: 1;
+  requestId: number;
+  result: GuestResult;
+  diagnostics?: readonly InstanceDiagnostic[];
+}>;
 
 const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
 const internalStage = "NOT CHECKED: internal-stage\n";
-const knownFailures: ReadonlySet<Failure> = new Set([
-  "abi", "trap", "replay-mismatch", "invalid-input", "input-limit", "output-limit",
-  "memory-limit", "runtime-oom", "busy", "host-io", "host-internal", "timeout", "worker",
-]);
+const knownFailures: ReadonlySet<Failure> = new Set(failureCodes);
 const policy = /^WITHIN LIMITS: clipped-gap C=\d{1,20} theta=\d{1,20} cap=\d{1,20} s=\d{1,20} sh=\d{1,20}$/;
 const plan = "PLAN ONLY: no proof was checked";
 

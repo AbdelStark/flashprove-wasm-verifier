@@ -115,5 +115,31 @@ test("an error releasing the call's input suppresses an otherwise complete resul
 
 test("the supervisor times out a Wasm loop that never yields", async () => {
   const supervisor = new NodeSupervisor();
-  expectFailure(await supervisor.run(probe, ["-plan", "spin"], { deadlineMs: 500 }), "timeout");
+  const events = [];
+  expectFailure(await supervisor.run(probe, ["-plan", "spin"], {
+    deadlineMs: 500, diagnostics: event => { events.push(event); },
+  }), "timeout");
+  assert.ok(events.some(event => event.phase === "call" && event.code === "timeout"));
+});
+
+test("supervised guest streams survive diagnostics and failed sinks without leaking rejected-stage data", async () => {
+  const supervisor = new NodeSupervisor();
+  const sensitive = ["/private-path", "injected-token", "rejected-stage-text", "stage stderr"];
+  const args = ["-key", "rejected", ...sensitive.slice(0, 2)];
+  const baseline = await supervisor.run(probe, args);
+  assert.equal(baseline.status, 1);
+  assert.equal(baseline.failure, null);
+  assert.equal(decoder.decode(baseline.stdout), `NO: ${sensitive[2]} ${sensitive[0]} ${sensitive[1]}\n`);
+  assert.equal(decoder.decode(baseline.stderr), `${sensitive[3]}\n`);
+  const events = [];
+  const observed = await supervisor.run(probe, args, { diagnostics: event => { events.push(event); } });
+  assert.deepEqual(observed, baseline);
+  assert.deepEqual(events.filter(event => event.phase === "instance").map(({ code, stage }) => [code, stage]),
+    [["start", "parent"], ["start", "key"], ["end", "key"], ["end", "parent"]]);
+  const serialized = JSON.stringify(events);
+  for (const secret of sensitive) assert.ok(!serialized.includes(secret));
+  assert.ok(events.some(event => event.phase === "replay" && event.stage === "key"));
+  assert.ok(events.some(event => event.phase === "stage" && event.stage === "key"));
+  assert.deepEqual(await supervisor.run(probe, args, { diagnostics() { throw new Error("sink offline"); } }), baseline);
+  assert.deepEqual(await supervisor.run(probe, args, { async diagnostics() { throw new Error("sink offline"); } }), baseline);
 });

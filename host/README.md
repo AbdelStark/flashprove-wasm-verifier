@@ -10,6 +10,8 @@ The Node runner starts a fresh WebAssembly instance for the parent and each seri
 
 The Node supervisor runs the guest in a fresh worker and owns the 600-second deadline on the calling thread. It checks the versioned reply and waits for clean worker exit before releasing a completed result. A timeout or delivery failure discards any proposed result. After a timeout the admission slot stays held until the worker stops. [Node worker event order](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html#event-message-1)
 
+Pass a `diagnostics` callback in the supervisor options to receive bounded provenance, timing, lifecycle and failure records. The callback receives records after the terminal decision. Guest output remains available through the original byte streams. [Diagnostics schema](../docs/spec/05-observability.md#runtime-diagnostics)
+
 Two front ends share it:
 
 - `fpv`, a Node command with `cp_verify`'s arguments, output and exit codes (R-API-1)

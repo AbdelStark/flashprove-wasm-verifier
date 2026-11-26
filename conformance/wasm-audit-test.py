@@ -28,6 +28,10 @@ def main():
     actual = json.loads((build / "wasm/audit-observed.json").read_text())
     audit.check_inventory(actual, reviewed)
     digest = (build / "wasm/source.sha256").read_text().strip()
+    port = (build / "wasm/port.sha256").read_text().strip()
+    wasm = build / "wasm/cp_verify.wasm"
+    audit.check_provenance(wasm, digest, port)
+    reject(lambda: audit.check_provenance(wasm, digest, "0" * 64), "module provenance does not match")
 
     with TemporaryDirectory(dir=build) as directory:
         work = Path(directory)

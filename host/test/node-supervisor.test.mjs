@@ -133,3 +133,19 @@ test("admission refuses invalid options before launching a worker and releases t
   workers[0].emit("exit", 0);
   assert.equal((await next).status, 4);
 });
+
+test("worker diagnostics are validated independently of the result", async () => {
+  const { host, workers } = controlled();
+  const events = [];
+  const collect = event => { events.push(event); };
+  const rejected = await host.run(module, ["/secret\0path"], { diagnostics: collect });
+  reject(rejected, "invalid-input");
+  assert.deepEqual(events.at(-1), { schema: 1, phase: "admission", code: "invalid-input" });
+  const pending = host.run(module, args, { diagnostics: collect });
+  assert.equal(workers[0].request.diagnostics, true);
+  workers[0].reply({ diagnostics: [{ schema: 1, phase: "instance", code: "start", stage: "secret-token" }] });
+  workers[0].emit("exit", 0);
+  assert.equal((await pending).status, 4);
+  assert.ok(!JSON.stringify(events).includes("secret"));
+  assert.ok(events.every(event => event.phase !== "instance"));
+});

@@ -1,6 +1,8 @@
 import { isAbsolute } from "node:path";
 import { parentPort } from "node:worker_threads";
 import { captureCliInputs } from "./cli-input.js";
+import { MAX_INSTANCE_DIAGNOSTICS } from "./diagnostics.js";
+import type { InstanceDiagnostic } from "./diagnostics.js";
 import { runNodeGuest } from "./node-replay.js";
 import type { NodeWorkerReply, NodeWorkerRequest } from "./node-worker-protocol.js";
 
@@ -13,13 +15,17 @@ port.once("message", (value: unknown) => {
   if (request.schema !== 1 || typeof request.requestId !== "number" || !Number.isSafeInteger(request.requestId)
     || request.requestId < 1 || !(request.module instanceof WebAssembly.Module)
     || !Array.isArray(request.argv) || request.argv[0] !== "cp_verify"
+    || (request.diagnostics !== undefined && request.diagnostics !== true)
     || typeof request.workingDirectory !== "string" || !isAbsolute(request.workingDirectory)) {
     throw new Error("invalid verifier request");
   }
   const { argv, workingDirectory, module } = request;
-  const result = runNodeGuest(module, () => captureCliInputs(argv.slice(1), workingDirectory));
+  const diagnostics: InstanceDiagnostic[] | undefined = request.diagnostics ? [] : undefined;
+  const result = runNodeGuest(module, () => captureCliInputs(argv.slice(1), workingDirectory), undefined,
+    diagnostics ? event => { if (diagnostics.length < MAX_INSTANCE_DIAGNOSTICS) diagnostics.push(event); } : undefined);
   const stdout = result.stdout.slice(), stderr = result.stderr.slice();
-  const reply: NodeWorkerReply = { schema: 1, requestId: request.requestId, result: { ...result, stdout, stderr } };
+  const reply: NodeWorkerReply = { schema: 1, requestId: request.requestId, result: { ...result, stdout, stderr },
+    ...(diagnostics ? { diagnostics } : {}) };
   port.postMessage(reply, [stdout.buffer, stderr.buffer]);
   port.close();
 });

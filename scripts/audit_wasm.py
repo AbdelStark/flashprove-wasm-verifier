@@ -78,6 +78,31 @@ def check_abi_documentation(reviewed, path=ABI):
     return len(entries)
 
 
+def sections(module):
+    with module.open("rb") as stream:
+        if read(stream, 8) != b"\0asm\x01\0\0\0":
+            raise ValueError("expected a WebAssembly core module")
+        while kind := stream.read(1):
+            yield kind, read(stream, u32(stream))
+
+
+def check_provenance(module, source, port, linked=None):
+    provenance = []
+    ordinary = []
+    for kind, payload in sections(module):
+        if kind != b"\0":
+            ordinary.append((kind, payload))
+            continue
+        custom = BytesIO(payload)
+        if name(custom) == "fpv.provenance":
+            provenance.append(custom.read())
+    expected = f"build={source}\nport={port}\n".encode("ascii")
+    if provenance != [expected]:
+        raise ValueError("module provenance does not match the build digests")
+    if linked is not None and ordinary != [(kind, data) for kind, data in sections(linked) if kind != b"\0"]:
+        raise ValueError("adding provenance changed non-custom sections")
+
+
 def dependency_paths(depfile, cwd, work):
     # Clang's -MD output uses Make's backslash escaping and dollar doubling.
     entries = depfile.read_text().replace("\\\n", "").partition(": ")[2]
@@ -187,7 +212,7 @@ def check_inventory(observed, reviewed):
 
 
 def main():
-    path, digest, report, *link = sys.argv[1:]
+    path, digest, port, report, *link = sys.argv[1:]
     work = Path(path).resolve()
     module = work / "cp_verify.wasm"
     observed = {"link_flags": link}
@@ -207,10 +232,12 @@ def main():
     reviewed = json.loads(BASELINE.read_text())
     documented = check_abi_documentation(reviewed)
     check_inventory(observed, reviewed)
+    check_provenance(module, digest, port, work / "linked.wasm")
     validate_instructions(module, work / "audit.cwasm")
     print(f"wasm audit: {len(dependencies)} dependencies, {len(direct | linked)} C symbols, "
           f"{len(observed['imports'])} typed imports")
     print(f"ABI v1: {documented} documented tuples match the linked module")
+    print("wasm audit: provenance matches both build digests and preserves non-custom sections")
 
 
 if __name__ == "__main__":
