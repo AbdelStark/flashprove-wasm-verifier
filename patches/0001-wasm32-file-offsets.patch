@@ -1,0 +1,15 @@
+--- a/verifier/src/vf_common.h
++++ b/verifier/src/vf_common.h
+@@ -261,4 +261,4 @@
+   }
+-  const long n = fseek(fp, 0, SEEK_END) ? -1 : ftell(fp);
+-  if (n < 0 || fseek(fp, 0, SEEK_SET)) {
++  const off_t n = fseeko(fp, 0, SEEK_END) ? -1 : ftello(fp);
++  if (n < 0 || n > PTRDIFF_MAX || fseeko(fp, 0, SEEK_SET)) {
+     fclose(fp);
+@@ -485,4 +485,3 @@
+ static_assert(textNumber(THRESHOLD_BITS_TEXT) == (u32)BAR, "the number in printed text is that of the constant");
+-static_assert(sizeof(long) == 8 && sizeof(size_t) == 8,
+-              "a file's length is stored in a long");
++static_assert(sizeof(off_t) == 8, "a file offset must hold 64 bits");
+ // Exit status and last line of a run where no check that ran failed but which is no verification.
