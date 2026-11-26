@@ -119,7 +119,13 @@ The [corpus matrix and CI gates](docs/spec/07-testing-strategy.md#corpus-matrix)
 
 The [platform inventory](docs/spec/01-architecture.md#port-audit) is normative. The build checks source dependencies against it.
 
+## 7. Threat model
+
+The [security contract](docs/spec/06-security.md#trust-boundaries) defines trust boundaries, failure evidence and disclosure.
+
 ## 8. Milestones
+
+The [implementation tracker](docs/roadmap/IMPLEMENTATION.md) links the work and its dependencies.
 
 | Stage | Release gate |
 |---|---|
