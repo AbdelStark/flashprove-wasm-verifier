@@ -1,18 +1,24 @@
-"""Run C1 part-calls through the restricted Wasmtime adapter and the native oracle."""
+"""Compare C1 part calls and plans in Wasmtime with the native oracle."""
 
+import json
 from pathlib import Path
 import subprocess
 import sys
 
+from conformance.compare import Case, RunResult, compare, load_exclusions
 from conformance.native_c1 import BUILD, FIXTURES, UPSTREAM, cases
 from host.wasmtime.stages import FAILED, PartRunner, Result
 
 
 def fixture_files(family, stage):
     root = f"examples/{family}"
-    paths = ["config/policy.txt", "config/KL.bin", "config/layout.txt", "ivk/key.bin"]
+    paths = ["config/policy.txt", "config/KL.bin", "config/layout.txt"]
+    if stage in ("key", "leaf", "plan-id"):
+        paths.append("ivk/key.bin")
     if stage == "leaf":
         paths.append("ivk/leaf/0.bin")
+    if stage == "plan-request":
+        paths.extend(("example.req", "example.y"))
     return {f"/{root}/{path}".encode(): (UPSTREAM / root / path).read_bytes() for path in paths}
 
 
@@ -50,25 +56,42 @@ def main():
         return
     if sys.argv[1:]:
         raise SystemExit("unknown part-call test option")
-    count = 0
+    exclusions = load_exclusions()
+    parts = plans = 0
+    equal_failures = 0
     for family, policy in FIXTURES.items():
         out = BUILD / "wasmtime-c1" / family
         out.mkdir(parents=True, exist_ok=True)
         for stage, args, status, verdict in cases(f"examples/{family}", policy):
-            if stage not in ("key", "leaf"):
+            if stage == "whole":
                 continue
             native = subprocess.run([BUILD / "native/cp_verify", *args], cwd=UPSTREAM, capture_output=True)
             guest = run_guest(runner, args, fixture_files(family, stage))
             save(out, f"{stage}.native", native.stdout, native.stderr)
             save(out, f"{stage}.wasm", guest.stdout, guest.stderr)
             ending = [verdict.encode()]
-            if (native.returncode != status or guest.status != status
-                    or native.stdout.splitlines()[-1:] != ending or guest.stdout.splitlines()[-1:] != ending):
-                raise SystemExit(f"Wasmtime C1 {family}/{stage}: native exit {native.returncode}, "
-                                 f"guest exit {guest.status}. See {out}")
-            count += 1
+            if native.returncode != status or native.stdout.splitlines()[-1:] != ending:
+                raise SystemExit(f"Wasmtime C1 {family}/{stage}: native oracle missed the expected outcome. See {out}")
+            mode = "plan" if stage.startswith("plan-") else stage
+            failure = "host-internal" if guest == Result(5, FAILED, b"") else None
+            result = compare(RunResult(native.returncode, native.stdout, native.stderr),
+                             RunResult(guest.status, guest.stdout, guest.stderr, failure),
+                             Case(f"{family}/{stage}", "C1", mode), exclusions)
+            (out / f"{stage}.json").write_text(json.dumps(result, sort_keys=True) + "\n")
+            if result["safetyViolation"]:
+                raise SystemExit(f"Wasmtime C1 {family}/{stage}: safety violation. See local case record.")
+            if not result["equal"]:
+                equal_failures += 1
+                print(f"Wasmtime C1: {family}/{stage} differs at {result['firstDifference']}", flush=True)
+                continue
+            if mode == "plan":
+                plans += 1
+            else:
+                parts += 1
             print(f"Wasmtime C1: {family}/{stage} exit={status} {verdict}", flush=True)
-    print(f"Wasmtime C1: {count} part calls, {count} PART PASSED, 0 terminal mismatches")
+    print(f"Wasmtime C1: {parts} matching part calls, {plans} matching plans, {equal_failures} equality differences")
+    if equal_failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

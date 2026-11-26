@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test conformance fuzz test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -35,7 +35,10 @@ wasm-io-test: build ## test the restricted Wasmtime I/O contract
 	@scripts/bootstrap-wasmtime-python.sh
 	@.toolchain/wasmtime-python/bin/python -B -m unittest conformance.wasmtime_io_test
 
-conformance: build reference ## run C1 part calls and corpora C3 and C4
+comparator-test: ## test conformance output comparison rules
+	@python3 -B -m unittest conformance.compare_test
+
+conformance: build reference comparator-test ## run C1 part calls and plans, C3 and C4
 	@conformance/c3.sh
 	@conformance/c4.sh
 	@scripts/bootstrap-wasmtime-python.sh

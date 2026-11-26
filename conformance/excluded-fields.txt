@@ -1,3 +1,3 @@
 # Fields excluded from output comparisons (R-EQ-3).
-# One entry per line: a pattern, then a tab, then the reason. Nothing a client reads under the
-# acceptance rule may be listed here. Empty until M1 measures what differs.
+# One entry per line with an approved anchor name, a tab, and the reason.
+stage-wall-time	Elapsed seconds in the exact upstream stage heading depend on the runtime.
