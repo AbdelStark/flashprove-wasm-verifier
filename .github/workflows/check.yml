@@ -16,3 +16,8 @@ jobs:
         run: make upstream
       - name: Fetch and verify the toolchain pin
         run: make bootstrap
+  native-c1:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make native-c1

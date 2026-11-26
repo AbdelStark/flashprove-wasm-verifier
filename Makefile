@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference build conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build conformance fuzz test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -16,8 +16,11 @@ upstream: ## fetch FlashProve at the pinned commit into .upstream/, examples has
 check: ## repository checks: locks, links, requirement IDs, prose
 	@python3 scripts/check-docs.py
 
-reference: ## build the native cp_verify with upstream's build.sh (x86_64 Linux, g++ 13+)  [M0]
-	@scripts/not-yet.sh $@ M0
+reference: upstream ## build the native cp_verify with upstream's build.sh (x86_64 Linux, g++ 13+)
+	@scripts/build-reference.sh
+
+native-c1: reference ## check published native whole calls, part calls and plans
+	@python3 conformance/native-c1.py
 
 build: ## build the WebAssembly module into build/  [M1]
 	@scripts/not-yet.sh $@ M1
