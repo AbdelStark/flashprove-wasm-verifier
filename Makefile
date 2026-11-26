@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -59,6 +59,14 @@ test: ## type-check the TypeScript host and run its contract tests
 
 scoped-disk-test: build reference test ## compare native and guest scoped input reads on Linux
 	@node conformance/cli-input-test.mjs
+
+replay-transport-test: test ## test Node replay events, pipes and wait status
+	@scripts/bootstrap-wasmtime-python.sh
+	@.toolchain/wasmtime-python/bin/python -B -c 'from pathlib import Path; import wasmtime; Path("build/node-replay-test.wasm").write_bytes(wasmtime.wat2wasm(Path("conformance/node-replay.wat").read_text()))'
+	@node --test conformance/node-replay-test.mjs
+
+replay-test: conformance replay-transport-test ## compare Node whole calls with the pinned native reference
+	@python3 -B -m conformance.node_replay_c1
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
 	@scripts/not-yet.sh $@ M4

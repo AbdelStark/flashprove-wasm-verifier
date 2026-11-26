@@ -23,14 +23,25 @@ const FD_STAT = 1n << 21n;
 const FILE_RIGHTS = FD_READ | FD_SEEK | FD_TELL | FD_SET_FLAGS | FD_STAT;
 const DIR_RIGHTS = PATH_OPEN | PATH_STAT | FD_STAT;
 
+export type StagePipe = { reader: number; writer: number; bytes?: Uint8Array; position: number };
+export type WasiObservation = {
+  span(bytes: Uint8Array): void;
+  lookup(path: string, open: boolean, entry: Lookup): void;
+};
+
 type Descriptor = (
   | { kind: "stdin" }
   | { kind: "output"; stream: Capture }
   | { kind: "directory"; path: string }
   | { kind: "file"; file: InputFile; position: bigint }
+  | { kind: "pipe-read" | "pipe-write"; pipe: StagePipe }
 ) & { rights: bigint; inheriting?: bigint };
 
-export class WasiFault extends Error {}
+export class WasiFault extends Error {
+  constructor(message: string, readonly code: "abi" | "output-limit" = "abi") {
+    super(message);
+  }
+}
 
 export class GuestExit extends Error {
   constructor(readonly status: number) {
@@ -39,12 +50,14 @@ export class GuestExit extends Error {
 }
 
 class Memory {
-  constructor(readonly buffer: ArrayBuffer) {}
+  constructor(readonly buffer: ArrayBuffer, private readonly observe?: WasiObservation) {}
 
   view(pointer: number, length: number): Uint8Array<ArrayBuffer> {
     const start = pointer >>> 0;
     if (length < 0 || length > this.buffer.byteLength - start) throw new WasiFault("guest memory range");
-    return new Uint8Array(this.buffer, start, length);
+    const span = new Uint8Array(this.buffer, start, length);
+    this.observe?.span(span);
+    return span;
   }
 
   data(pointer: number, length: number): DataView<ArrayBuffer> {
@@ -87,9 +100,15 @@ class Capture {
   bytes(): Uint8Array<ArrayBuffer> {
     return this.#bytes.slice(0, this.length);
   }
+
+  clear() {
+    this.#bytes = new Uint8Array(0);
+    this.length = 0;
+  }
 }
 
 function fileType(kind: Descriptor["kind"]): number {
+  if (kind === "pipe-read" || kind === "pipe-write") return 0;
   return kind === "directory" ? 3 : kind === "file" ? 4 : 2;
 }
 
@@ -120,7 +139,7 @@ export class WasiPreview1 {
   constructor(
     private readonly snapshot: CallSnapshot,
     private readonly memory: () => WebAssembly.Memory,
-    options: { clock?: () => bigint; outputLimit?: number } = {},
+    private readonly options: { clock?: () => bigint; outputLimit?: number; observe?: WasiObservation } = {},
   ) {
     this.#argv = snapshot.argv.map(arg => encoder.encode(arg));
     this.#argSize = this.#argv.reduce((size, arg) => size + arg.length + 1, 0);
@@ -132,7 +151,55 @@ export class WasiPreview1 {
   }
 
   get #memory(): Memory {
-    return new Memory(this.memory().buffer);
+    return new Memory(this.memory().buffer, this.options.observe);
+  }
+
+  #available(from = 4): number {
+    for (let fd = from; fd < MAX_FDS; fd++) if (!this.#fds.has(fd)) return fd;
+    return -1;
+  }
+
+  makePipe(pointer: number): StagePipe {
+    const out = this.#memory.data(pointer, 8);
+    const reader = this.#available();
+    const writer = reader === -1 ? -1 : this.#available(reader + 1);
+    if (writer === -1) throw new WasiFault("guest descriptor limit");
+    const pipe = { reader, writer, position: 0 };
+    this.#fds.set(reader, { kind: "pipe-read", pipe, rights: FD_READ });
+    this.#fds.set(writer, { kind: "pipe-write", pipe, rights: FD_WRITE });
+    out.setUint32(0, reader, true);
+    out.setUint32(4, writer, true);
+    return pipe;
+  }
+
+  hasPipe(pipe: StagePipe): boolean {
+    const reader = this.#fds.get(pipe.reader);
+    const writer = this.#fds.get(pipe.writer);
+    return reader?.kind === "pipe-read" && reader.pipe === pipe && writer?.kind === "pipe-write" && writer.pipe === pipe;
+  }
+
+  beginChild() {
+    this.#stdout.clear();
+    this.#stderr.clear();
+  }
+
+  redirectChild(pipe: StagePipe, oldFd: number, newFd: number): number {
+    const old = this.#fds.get(oldFd);
+    if (newFd !== 1 || oldFd !== pipe.writer || old?.kind !== "pipe-write" || old.pipe !== pipe) {
+      throw new WasiFault("unexpected child stdout redirect");
+    }
+    this.#fds.set(newFd, { kind: "output", stream: this.#stdout, rights: FD_WRITE });
+    return newFd;
+  }
+
+  writeWaitWord(pointer: number, word: number) {
+    this.#memory.data(pointer, 4).setUint32(0, word, true);
+  }
+
+  appendChildStderr(bytes: Uint8Array) {
+    const maximum = this.#outputLimit - this.#stdout.length;
+    if (bytes.length > maximum - this.#stderr.length) throw new WasiFault("guest output limit", "output-limit");
+    this.#stderr.append([bytes], bytes.length, maximum);
   }
 
   streams() {
@@ -191,15 +258,13 @@ export class WasiPreview1 {
       if (resolved.kind === "error") return resolved.errno;
       if (oflags === 2 && resolved.kind === "file") return Errno.notdir;
       const out = this.#memory.data(output, 4);
-      for (let index = 4; index < MAX_FDS; index++) {
-        if (this.#fds.has(index)) continue;
-        this.#fds.set(index, resolved.kind === "directory"
-          ? { kind: "directory", path: resolved.path, rights: base & DIR_RIGHTS, inheriting }
-          : { kind: "file", file: resolved, rights: base & FILE_RIGHTS, position: 0n });
-        out.setUint32(0, index, true);
-        return Errno.success;
-      }
-      return Errno.mfile;
+      const index = this.#available();
+      if (index === -1) return Errno.mfile;
+      this.#fds.set(index, resolved.kind === "directory"
+        ? { kind: "directory", path: resolved.path, rights: base & DIR_RIGHTS, inheriting }
+        : { kind: "file", file: resolved, rights: base & FILE_RIGHTS, position: 0n });
+      out.setUint32(0, index, true);
+      return Errno.success;
     },
     path_filestat_get: (fd: number, flags: number, pointer: number, length: number, output: number) => {
       const resolved = this.#resolve(fd, flags, pointer, length, PATH_STAT);
@@ -228,7 +293,13 @@ export class WasiPreview1 {
       if (!entry) return Errno.badf;
       return flags === 0 && (entry.rights & FD_SET_FLAGS) ? Errno.success : Errno.notcapable;
     },
-    fd_close: (fd: number) => this.#fds.delete(fd) ? Errno.success : Errno.badf,
+    fd_close: (fd: number) => {
+      const entry = this.#fds.get(fd);
+      if (!entry) return Errno.badf;
+      if (entry.kind === "pipe-read") entry.pipe.bytes = undefined;
+      this.#fds.delete(fd);
+      return Errno.success;
+    },
     fd_seek: (fd: number, offset: bigint, whence: number, pointer: number) => {
       const entry = this.#fds.get(fd);
       if (!entry) return Errno.badf;
@@ -256,7 +327,7 @@ export class WasiPreview1 {
       const size = spans.reduce((bytes, span) => bytes + span.length, 0);
       const other = entry.stream === this.#stdout ? this.#stderr : this.#stdout;
       const maximum = this.#outputLimit - other.length;
-      if (size > maximum - entry.stream.length) throw new WasiFault("guest output limit");
+      if (size > maximum - entry.stream.length) throw new WasiFault("guest output limit", "output-limit");
       entry.stream.append(spans, size, maximum);
       result.setUint32(0, size, true);
       return Errno.success;
@@ -297,14 +368,17 @@ export class WasiPreview1 {
     if (path.includes("\0")) return { kind: "error", errno: Errno.inval };
     if (path.startsWith("/")) return { kind: "error", errno: Errno.notcapable };
     if (fd === 3 && this.snapshot.namespace.lookupOperand) {
-      const entry = this.snapshot.namespace.lookupOperand(path, right === PATH_OPEN);
+      const open = right === PATH_OPEN;
+      const entry = this.snapshot.namespace.lookupOperand(path, open);
+      this.options.observe?.lookup(path, open, entry);
       return entry.kind === "directory" ? { kind: "directory", path: "/" } : entry;
     }
 
     const root = directory.path === "/" ? [] : directory.path.slice(1).split("/");
     const parts = root.slice();
     let current: Lookup = { kind: "directory" };
-    for (const part of path.split("/")) {
+    const components = path.split("/");
+    for (const [index, part] of components.entries()) {
       if (current.kind === "file") return { kind: "error", errno: Errno.notdir };
       if (part === "" || part === ".") continue;
       if (part === "..") {
@@ -318,6 +392,7 @@ export class WasiPreview1 {
         return { kind: "error", errno: Errno.inval };
       }
       current = this.snapshot.namespace.lookup(canonical);
+      this.options.observe?.lookup(canonical, right === PATH_OPEN && index === components.length - 1, current);
       if (current.kind === "error") return current;
     }
     return current.kind === "directory" ? { kind: "directory", path: "/" + parts.join("/") } : current;
@@ -343,6 +418,16 @@ export class WasiPreview1 {
         if (copied < span.length) break;
       }
       if (offset === undefined) entry.position += BigInt(bytes);
+    } else if (entry.kind === "pipe-read") {
+      const pipe = entry.pipe;
+      if (pipe.bytes === undefined) throw new WasiFault("stage pipe before completion");
+      for (const span of spans) {
+        const count = Math.min(span.length, pipe.bytes.length - pipe.position);
+        span.set(pipe.bytes.subarray(pipe.position, pipe.position + count));
+        pipe.position += count;
+        bytes += count;
+        if (count < span.length) break;
+      }
     }
     result.setUint32(0, bytes, true);
     return Errno.success;
