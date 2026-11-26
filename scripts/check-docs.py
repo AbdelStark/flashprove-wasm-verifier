@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Repository checks that need no toolchain: lock files parse, every relative link in the
-Markdown resolves, every requirement ID cited outside SPEC.md is defined in it, and prose has no
-em or en dashes. Exit 1 on any finding."""
-import pathlib, re, sys
+"""Check locks, links, requirement references, prose and the documented guest ABI."""
+import json, pathlib, re, sys
+
+from audit_wasm import BASELINE, check_abi_documentation
 
 root = pathlib.Path(__file__).resolve().parent.parent
 bad = []
@@ -36,6 +36,12 @@ for p in docs:
     for rid in set(re.findall(r"\bR-[A-Z]+-\d+\b", text)):
         if rid not in defined:
             bad.append(f"{rel}: {rid} is not defined in SPEC.md")
+
+try:
+    documented = check_abi_documentation(json.loads(BASELINE.read_text()))
+    print(f"ABI v1: {documented} documented tuples match the reviewed imports")
+except (OSError, ValueError) as error:
+    bad.append(f"port/ABI.md: {error}")
 
 for b in bad:
     print(b)

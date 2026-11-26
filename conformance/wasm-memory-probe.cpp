@@ -36,7 +36,12 @@ int main(int argc, char **argv) {
     std::free(resize(data, 0));
     return 0;
   }
-  if (!std::strcmp(argv[2], "child")) {
+  volatile intptr_t invalid = -1;
+  if (!std::strcmp(argv[2], "bad-pipe-pointer")) {
+    return pipe(reinterpret_cast<int *>(invalid));
+  }
+  const bool bad_wait = !std::strcmp(argv[2], "bad-wait-pointer");
+  if (bad_wait || !std::strcmp(argv[2], "child")) {
     int fds[2];
     if (pipe(fds)) return 2;
     const pid_t pid = fork();
@@ -52,7 +57,7 @@ int main(int argc, char **argv) {
     while (read(fds[0], data, sizeof data) > 0) {}
     close(fds[0]);
     int status;
-    if (waitpid(pid, &status, 0) != pid) return 2;
+    if (waitpid(pid, bad_wait ? reinterpret_cast<int *>(invalid) : &status, 0) != pid) return 2;
     if (WIFSIGNALED(status) && WTERMSIG(status) == 6) {
       std::puts("NO: synthetic");
       return 1;

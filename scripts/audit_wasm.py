@@ -11,6 +11,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SDK = ROOT / ".toolchain/wasi-sdk"
 BASELINE = ROOT / "port/audit.json"
+ABI = ROOT / "port/ABI.md"
 VALUE_TYPES = {0x7F: "i32", 0x7E: "i64", 0x7D: "f32", 0x7C: "f64", 0x7B: "v128", 0x69: "exnref"}
 
 
@@ -64,6 +65,17 @@ def imports(module):
             elif section_id > 2:
                 break
     return []
+
+
+def check_abi_documentation(reviewed, path=ABI):
+    document = path.read_text(encoding="utf-8")
+    if document.partition("\n")[0] != "# Guest ABI v1":
+        raise ValueError("expected frozen guest ABI v1")
+    entries = sorted(f"{name} {signature}" for name, signature in re.findall(
+        r"^\| `([\w.]+)` \| `(\([^()`]*\)->\([^()`]*\))` \|$", document, re.MULTILINE))
+    if entries != reviewed["imports"]:
+        raise ValueError("documented ABI tuples differ from the reviewed imports")
+    return len(entries)
 
 
 def dependency_paths(depfile, cwd, work):
@@ -192,10 +204,13 @@ def main():
                     linked_c_symbols=sorted(linked), imports=imports(module), memory_limits=memory_limits(module),
                     memory_growth=growth_sites(module))
     Path(report).write_text(json.dumps(observed, indent=2) + "\n")
-    check_inventory(observed, json.loads(BASELINE.read_text()))
+    reviewed = json.loads(BASELINE.read_text())
+    documented = check_abi_documentation(reviewed)
+    check_inventory(observed, reviewed)
     validate_instructions(module, work / "audit.cwasm")
     print(f"wasm audit: {len(dependencies)} dependencies, {len(direct | linked)} C symbols, "
           f"{len(observed['imports'])} typed imports")
+    print(f"ABI v1: {documented} documented tuples match the linked module")
 
 
 if __name__ == "__main__":

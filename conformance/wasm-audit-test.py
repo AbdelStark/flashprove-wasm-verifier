@@ -31,6 +31,10 @@ def main():
 
     with TemporaryDirectory(dir=build) as directory:
         work = Path(directory)
+        docs = work / "ABI.md"
+        docs.write_text(audit.ABI.read_text().replace(
+            "`fpv_port.pipe` | `(i32)->(i32)`", "`fpv_port.pipe` | `(i64)->(i32)`"))
+        reject(lambda: audit.check_abi_documentation(reviewed, docs), "documented ABI tuples differ")
         cwd = work / "verifier/src"
         cwd.mkdir(parents=True)
         (cwd / "audit-extra.h").write_text('extern "C" int extra(int)\n'

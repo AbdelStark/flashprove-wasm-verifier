@@ -7,3 +7,4 @@ source "$(dirname "$0")/../scripts/wasm-toolchain.sh"
   -Wl,--max-memory=16777216 -o "$ROOT/build/wasm-memory-probe.wasm"
 cd "$ROOT"
 node --test conformance/node-limits-test.mjs
+"$ROOT/.toolchain/wasmtime-python/bin/python" -B -m unittest conformance.wasmtime_abi_test

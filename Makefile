@@ -14,7 +14,7 @@ upstream: ## fetch FlashProve at the pinned commit into .upstream/, examples has
 	@scripts/fetch-upstream.sh
 
 check: ## repository checks: locks, links, requirement IDs, prose
-	@python3 scripts/check-docs.py
+	@python3 -B scripts/check-docs.py
 
 reference: upstream ## build the native cp_verify with upstream's build.sh (x86_64 Linux, g++ 13+)
 	@scripts/build-reference.sh
@@ -68,7 +68,7 @@ replay-transport-test: test ## test Node replay events, pipes and wait status
 replay-test: conformance replay-transport-test ## compare Node whole calls with the pinned native reference
 	@python3 -B -m conformance.node_replay_c1
 
-memory-limit-test: bootstrap replay-transport-test ## test Node admission and genuine Wasm resource faults
+memory-limit-test: bootstrap replay-transport-test ## test resource faults and the process ABI in Wasm
 	@bash conformance/wasm-memory-test.sh
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
