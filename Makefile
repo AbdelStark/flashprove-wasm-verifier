@@ -53,8 +53,9 @@ memory-probe: conformance ## measure full-size native RSS and Wasmtime stage pag
 fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 	@scripts/not-yet.sh $@ M2
 
-test: ## host unit tests  [M2]
-	@scripts/not-yet.sh $@ M2
+test: ## type-check the TypeScript host and run its contract tests
+	@npm ci --ignore-scripts --no-audit --no-fund
+	@npm test
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
 	@scripts/not-yet.sh $@ M4
