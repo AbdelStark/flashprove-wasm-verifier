@@ -8,9 +8,10 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from conformance.altered import source_rows
 from conformance.compare import Case, RunResult, compare
 from conformance.evidence import write_json
-from conformance.node_differential import Invocation, differential, read_json
+from conformance.node_differential import Invocation, differential, mutation_gate, read_json, rejection_name
 
 
 class NodeGateTest(unittest.TestCase):
@@ -79,5 +80,38 @@ class NodeGateTest(unittest.TestCase):
         self.assertEqual(report["counts"]["C1"]["nativeVerdicts"], {"NO": 1})
         self.assertEqual(report["counts"]["C1"]["guestVerdicts"], {"YES": 1})
         self.assertEqual(report["gates"]["C6"]["state"], "not-run")
+        self.assertEqual(report["gates"]["C2"]["state"], "not-run")
         self.assertNotIn("private-proof-text", self.report.read_text())
         self.assertEqual(run.call_count, 1)
+
+    def test_c2_counts_physical_rows_and_rejects_missing_or_malformed_rows(self):
+        table = b"# comment\n\nlabel\texample.y\tfirst\tflip\tNO: statement-range\n"
+        self.assertEqual(source_rows(table, 1)[0][0], 3)
+        with self.assertRaisesRegex(ValueError, "table size or row"):
+            source_rows(table, 2)
+        with self.assertRaisesRegex(ValueError, "table size or row"):
+            source_rows(b"missing columns\n", 1)
+
+    def test_c2_missing_cases_and_native_oracle_mismatch_fail_separately(self):
+        case = Case("altered_copies/line-3", "C2", "whole")
+        rejection = RunResult(1, b"NO: statement-range\n", b"")
+        result = compare(rejection, rejection, case)
+        result.update(provenance={"table": "altered_copies.tsv"}, oracleMatches=False)
+        for enforced, reason in ((2, "missing-cases"), (1, "upstream-oracle-mismatch")):
+            report = {"gates": {"C2": {}}, "cases": [], "counts": {}, "safetyViolations": 0,
+                      "equalityDifferences": 0}
+            with (patch("conformance.node_differential.TABLES", {"altered_copies.tsv": ("fixture", enforced)}),
+                  patch("conformance.node_differential.mutation_cases", return_value=[Invocation(case, [])]),
+                  patch("conformance.node_differential.execute_case", return_value=result),
+                  redirect_stdout(StringIO())):
+                self.assertFalse(mutation_gate(self.root, self.root, report, frozenset()))
+            self.assertEqual(report["gates"]["C2"]["reason"], reason)
+            self.assertEqual(report["gates"]["C2"].get("missingRows", {}),
+                             {"altered_copies.tsv": 1} if enforced == 2 else {})
+            self.assertEqual(report["counts"]["C2"]["tables"], {"altered_copies.tsv": 1})
+            self.assertEqual(report["equalityDifferences"], 0)
+
+    def test_c2_records_only_pinned_rejection_names(self):
+        known = {b"proof-refused"}
+        self.assertEqual(rejection_name(RunResult(1, b"NO: proof-refused\n", b""), known), "proof-refused")
+        self.assertIsNone(rejection_name(RunResult(1, b"NO: private-token\n", b""), known))
