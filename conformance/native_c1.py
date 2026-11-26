@@ -17,13 +17,13 @@ FIXTURES = {
 }
 
 
-def cases(fixture, policy):
+def cases(fixture, policy, upstream=UPSTREAM):
     config = f"{fixture}/config"
     ivk = f"{fixture}/ivk"
     key = f"{ivk}/key.bin"
     request = f"{fixture}/example.req"
     reply = f"{fixture}/example.y"
-    commitment = (UPSTREAM / fixture / "ID.txt").read_text().strip()
+    commitment = (upstream / fixture / "ID.txt").read_text().strip()
     identity = ["-id", commitment, "-q"]
     whole = [config, ivk, request, reply, f"{fixture}/example.proof", *identity]
     verdict = "YES"

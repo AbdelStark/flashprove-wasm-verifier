@@ -111,6 +111,13 @@ def rejection_name(result, known):
     return None
 
 
+def copy_fixture(root, cwd, fixture):
+    source = root / ".upstream/FlashProve/examples" / fixture
+    target = cwd / "examples" / fixture
+    copytree(source, target, copy_function=copyfile)
+    return target
+
+
 def execute_case(root, directory, invocation, exclusions):
     case = invocation.case
     cwd = directory / case.corpus / case.id
@@ -120,8 +127,7 @@ def execute_case(root, directory, invocation, exclusions):
     if row is None:
         (cwd / "examples").symlink_to(examples, target_is_directory=True)
     else:
-        fixture = cwd / "examples" / row.fixture
-        copytree(examples / row.fixture, fixture, copy_function=copyfile)
+        fixture = copy_fixture(root, cwd, row.fixture)
         for target, data in row.changed.items():
             (fixture / target).write_bytes(data)
     native, guest = run_pair(root, invocation.args, cwd)
