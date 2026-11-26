@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test conformance fuzz test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -22,8 +22,11 @@ reference: upstream ## build the native cp_verify with upstream's build.sh (x86_
 native-c1: reference ## check published native whole calls, part calls and plans
 	@python3 conformance/native-c1.py
 
-build: ## build the WebAssembly module into build/  [M1]
-	@scripts/not-yet.sh $@ M1
+build: bootstrap upstream ## compile the single-threaded WebAssembly module
+	@scripts/build-wasm.sh
+
+wasm-build-test: build ## test the Wasm build digest, fallback paths and thread arguments
+	@conformance/wasm-build-test.sh
 
 conformance: ## corpora C1 to C4 and C6 against the native reference  [M1, M2]
 	@scripts/not-yet.sh $@ M1

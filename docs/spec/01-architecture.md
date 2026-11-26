@@ -23,10 +23,12 @@ Build checks track the transitive compilation inputs, platform dependencies and 
 | Dependency | Upstream site | Disposition and check |
 |---|---|---|
 | `fork`, `pipe`, `dup2`, `read`, `close`, `waitpid`, `exit`, `_exit` | `cpStagesRun` in `cp_verify.cpp` | Port ABI and WASI process exit. Assert pid, descriptor and termination behavior. |
-| `std::thread`, `std::mutex`, atomics | `parFor` and parent reader threads | Single-thread fallback. Real shared atomics only on the threaded candidate. |
+| `std::thread`, `std::mutex`, atomics | `parFor` and parent reader threads | The `pthread_create`, `pthread_mutex_lock` and `pthread_mutex_unlock` shims select the upstream single-thread fallback. The Wasm build probe exercises both sites. Real shared atomics only on the threaded candidate. |
 | `prctl`, `PR_SET_DUMPABLE` | `main` on Linux | Excluded by the platform guard. Public-only host contract. |
 | `madvise`, `sysconf`, `<sys/mman.h>` | `makePagesResident` in `vf_common.h` | Resolve the header. Keep `MADV_POPULATE_WRITE` undefined. |
 | `stat`, `fstat`, `fopen`, `fcntl(F_GETFD)` | `vf_common.h` file access and `main` | Read-only namespace and descriptor status shim. |
+| `fseeko`, `ftello`, `off_t`, `PTRDIFF_MAX` | `readWords` in `vf_common.h` | Use wasi-libc's 64-bit offsets. Reject lengths beyond the guest buffer range before resizing. The Wasm build probe tests both representable and oversized lengths. [ADR 0004](../adr/0004-wasm32-file-offsets.md) |
+| `<sys/resource.h>` | `cp_verify.cpp` | Unused on WASI. The port supplies an empty header. The pinned build checks this assumption. |
 | `signal`, `SIGCHLD` | `cpStagesRun` | Checked shim only for the observed default disposition. |
 | `exp`, `sin`, `cos`, `pow`, `round`, `nearbyint`, `ldexp` | verifier tables and shape helpers | Entry-by-entry parity and strict compiler flags. Audit actual link symbols. |
 | `unsigned __int128`, compiler runtime helpers | `blocks/base.h`, `vf_common.h`, `vf_smallness_packing.h` | compiler-rt and field vectors. |
