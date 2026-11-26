@@ -2,6 +2,7 @@
 
 import { Errno, MAX_PATH_BYTES } from "./namespace.js";
 import type { CallSnapshot, InputFile, Lookup } from "./namespace.js";
+import { BASELINE_LIMITS } from "./limits.js";
 
 export const PREVIEW1 = "wasi_snapshot_preview1";
 const U32_MAX = 0xffff_ffff;
@@ -102,8 +103,32 @@ class Capture {
   }
 
   clear() {
+    return this.take().length;
+  }
+
+  take(): Uint8Array<ArrayBuffer> {
+    const data = this.#bytes.subarray(0, this.length);
     this.#bytes = new Uint8Array(0);
     this.length = 0;
+    return data;
+  }
+}
+
+export class OutputBudget {
+  #retained = 0;
+
+  constructor(readonly limit: number) {
+    if (!Number.isSafeInteger(limit) || limit < 0 || limit > U32_MAX) throw new RangeError("invalid output limit");
+  }
+
+  admit(bytes: number) {
+    if (bytes > this.limit - this.#retained) throw new WasiFault("guest output limit", "output-limit");
+    this.#retained += bytes;
+  }
+
+  release(bytes: number) {
+    if (bytes > this.#retained) throw new WasiFault("invalid output accounting");
+    this.#retained -= bytes;
   }
 }
 
@@ -133,21 +158,26 @@ export class WasiPreview1 {
   readonly #argv: Uint8Array<ArrayBuffer>[];
   readonly #argSize: number;
   readonly #clock: () => bigint;
-  readonly #outputLimit: number;
+  readonly #output: OutputBudget;
+  #discardPrefix: boolean;
   #lastTime = 0n;
 
   constructor(
     private readonly snapshot: CallSnapshot,
     private readonly memory: () => WebAssembly.Memory,
-    private readonly options: { clock?: () => bigint; outputLimit?: number; observe?: WasiObservation } = {},
+    private readonly options: {
+      clock?: () => bigint;
+      outputLimit?: number;
+      output?: OutputBudget;
+      discardPrefix?: boolean;
+      observe?: WasiObservation;
+    } = {},
   ) {
     this.#argv = snapshot.argv.map(arg => encoder.encode(arg));
     this.#argSize = this.#argv.reduce((size, arg) => size + arg.length + 1, 0);
     this.#clock = options.clock ?? (() => BigInt(Math.floor(performance.now() * 1e6)));
-    this.#outputLimit = options.outputLimit ?? 8 * 2 ** 20;
-    if (!Number.isSafeInteger(this.#outputLimit) || this.#outputLimit < 0 || this.#outputLimit > U32_MAX) {
-      throw new RangeError("invalid output limit");
-    }
+    this.#output = options.output ?? new OutputBudget(options.outputLimit ?? BASELINE_LIMITS.outputBytes);
+    this.#discardPrefix = options.discardPrefix ?? false;
   }
 
   get #memory(): Memory {
@@ -179,8 +209,7 @@ export class WasiPreview1 {
   }
 
   beginChild() {
-    this.#stdout.clear();
-    this.#stderr.clear();
+    this.#discardPrefix = false;
   }
 
   redirectChild(pipe: StagePipe, oldFd: number, newFd: number): number {
@@ -197,13 +226,19 @@ export class WasiPreview1 {
   }
 
   appendChildStderr(bytes: Uint8Array) {
-    const maximum = this.#outputLimit - this.#stdout.length;
-    if (bytes.length > maximum - this.#stderr.length) throw new WasiFault("guest output limit", "output-limit");
-    this.#stderr.append([bytes], bytes.length, maximum);
+    this.#stderr.append([bytes], bytes.length, this.#output.limit);
   }
 
   streams() {
     return { stdout: this.#stdout.bytes(), stderr: this.#stderr.bytes() };
+  }
+
+  takeStreams() {
+    return { stdout: this.#stdout.take(), stderr: this.#stderr.take() };
+  }
+
+  discardStreams() {
+    this.#output.release(this.#stdout.clear() + this.#stderr.clear());
   }
 
   readonly imports = Object.freeze({
@@ -296,7 +331,10 @@ export class WasiPreview1 {
     fd_close: (fd: number) => {
       const entry = this.#fds.get(fd);
       if (!entry) return Errno.badf;
-      if (entry.kind === "pipe-read") entry.pipe.bytes = undefined;
+      if (entry.kind === "pipe-read" && entry.pipe.bytes) {
+        this.#output.release(entry.pipe.bytes.length - entry.pipe.position);
+        entry.pipe.bytes = undefined;
+      }
       this.#fds.delete(fd);
       return Errno.success;
     },
@@ -325,10 +363,10 @@ export class WasiPreview1 {
       const result = memory.data(pointer, 4);
       const spans = memory.iovecs(vectors, count);
       const size = spans.reduce((bytes, span) => bytes + span.length, 0);
-      const other = entry.stream === this.#stdout ? this.#stderr : this.#stdout;
-      const maximum = this.#outputLimit - other.length;
-      if (size > maximum - entry.stream.length) throw new WasiFault("guest output limit", "output-limit");
-      entry.stream.append(spans, size, maximum);
+      if (!this.#discardPrefix) {
+        this.#output.admit(size);
+        entry.stream.append(spans, size, this.#output.limit);
+      }
       result.setUint32(0, size, true);
       return Errno.success;
     },
@@ -427,6 +465,11 @@ export class WasiPreview1 {
         pipe.position += count;
         bytes += count;
         if (count < span.length) break;
+      }
+      this.#output.release(bytes);
+      if (pipe.position === pipe.bytes.length) {
+        pipe.bytes = new Uint8Array(0);
+        pipe.position = 0;
       }
     }
     result.setUint32(0, bytes, true);

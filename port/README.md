@@ -35,4 +35,6 @@ The serving build uses the upstream macros, C++17, `-O2`, exceptions and the sam
 
 The inventory classifies `upstream/` paths as pinned verifier inputs, `sdk/` paths as headers from the pinned compiler or sysroot, and `port/` paths as repository-owned platform code. The [platform audit table](../docs/spec/01-architecture.md#port-audit) records the treatment of source dependencies and WASI calls. A new dependency needs a row and a check before the inventory is updated. `build/wasm/audit-observed.json` contains the observed inventory for review.
 
+The serving module declares a 57,344-page maximum. Its only `memory.grow` site is the checked `sbrk` shim. The host sets the per-instance cap before `_start`. The shim marks and traps on a denied or failed grow. The linked allocation wrappers trap if a nonempty `malloc`, `calloc`, `realloc` or `aligned_alloc` fails. Zero-size requests retain libc behavior. [Resource limits](../docs/spec/08-performance-budget.md#resource-envelope)
+
 `make wasm-audit-test` builds a probe with an unreviewed header and typed import. It also tests compiler flags and a relaxed SIMD instruction. It checks that the page-residency macro stays absent.

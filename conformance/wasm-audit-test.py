@@ -68,6 +68,13 @@ def main():
                        '  local.get 0 local.get 1 local.get 2 f32x4.relaxed_madd))\n')
         reject(lambda: audit.validate_instructions(wat, work / "relaxed.cwasm"), "relaxed SIMD")
 
+        grow = cwd / "uncontrolled-grow.cpp"
+        grow.write_text('int main(int argc, char **) { return __builtin_wasm_memory_grow(0, argc); }\n')
+        uncontrolled = work / "uncontrolled-grow.wasm"
+        subprocess.run([compiler, grow, "-o", uncontrolled], check=True)
+        reject(lambda: audit.growth_sites(uncontrolled), "unexpected memory.grow sites")
+        reject(lambda: audit.memory_limits(uncontrolled), "declared maximum")
+
 
 if __name__ == "__main__":
     main()

@@ -12,6 +12,7 @@ wasm_flags=(-std=c++17 -O2 -fexceptions -fwasm-exceptions -mllvm -wasm-use-legac
   "-ffile-prefix-map=$ROOT=." "-I$ROOT/port/include"
   "-I$upstream/blocks" "-I$upstream/prover")
 wasm_link=(-Wl,-z,stack-size=1048576 -lunwind)
+wasm_memory_link=(-Wl,--max-memory=3758096384,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=aligned_alloc)
 
 prepare_wasm_source() {
   mkdir -p "$1/verifier"

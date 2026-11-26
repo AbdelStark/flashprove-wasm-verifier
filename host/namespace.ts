@@ -1,5 +1,7 @@
 /** Synchronous admission of the files and arguments shared by a call. */
 
+import { BASELINE_LIMITS } from "./limits.js";
+
 export const Errno = {
   success: 0,
   acces: 2,
@@ -17,8 +19,8 @@ export const Errno = {
 } as const;
 
 export const MAX_PATH_BYTES = 4096;
-export const MAX_FILE_BYTES = 64 * 2 ** 20;
-export const MAX_INPUT_BYTES = 128 * 2 ** 20;
+export const MAX_FILE_BYTES = BASELINE_LIMITS.fileBytes;
+export const MAX_INPUT_BYTES = BASELINE_LIMITS.totalInputBytes;
 const MAX_ARGUMENT_BYTES = 2 ** 20;
 const MAX_ARGUMENTS = 4096;
 const MAX_PATH_METADATA_BYTES = 2 ** 20;
@@ -34,6 +36,7 @@ export type Lookup = InputFile | Readonly<{ kind: "directory" }> | Readonly<{ ki
 export interface CallNamespace {
   lookup(path: string): Lookup;
   lookupOperand?(path: string, open: boolean): Lookup;
+  close?(): void;
 }
 export type CallSnapshot = Readonly<{ argv: readonly string[]; namespace: CallNamespace }>;
 
