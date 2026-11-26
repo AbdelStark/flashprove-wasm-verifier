@@ -128,6 +128,41 @@ def validate_instructions(module, output):
     )
 
 
+def memory_limits(module):
+    with module.open("rb") as stream:
+        if read(stream, 8) != b"\0asm\x01\0\0\0":
+            raise ValueError("expected a WebAssembly core module")
+        while section := stream.read(1):
+            size = u32(stream)
+            if section == b"\x05":
+                payload = BytesIO(read(stream, size))
+                if u32(payload) != 1 or u32(payload) != 1:
+                    raise ValueError("expected one unshared wasm32 memory with a declared maximum")
+                limits = [str(u32(payload)), str(u32(payload))]
+                if payload.read(1):
+                    raise ValueError("unexpected memory section data")
+                return limits
+            stream.seek(size, 1)
+    raise ValueError("missing guest memory")
+
+
+def growth_sites(module):
+    sites = []
+    function = ""
+    with subprocess.Popen([SDK / "bin/llvm-objdump", "-d", module], stdout=subprocess.PIPE, text=True) as proc:
+        for line in proc.stdout:
+            symbol = re.fullmatch(r"[0-9a-f]+ <([^>]+)>:\n", line)
+            if symbol:
+                function = symbol[1]
+            if "\tmemory.grow\t" in line:
+                sites.append(function)
+        if proc.wait():
+            raise ValueError("could not audit WebAssembly growth instructions")
+    if sites != ["sbrk"]:
+        raise ValueError("unexpected memory.grow sites")
+    return sites
+
+
 def check_inventory(observed, reviewed):
     for key, current in observed.items():
         approved = reviewed[key]
@@ -146,7 +181,7 @@ def main():
     observed = {"link_flags": link}
     dependencies = set()
     direct = set()
-    for unit in ("cp_verify", "baseline", "process"):
+    for unit in ("cp_verify", "baseline", "process", "memory"):
         dependencies.update(dependency_paths(work / f"{unit}.d", work / "verifier/src", work))
         observed[f"{unit}_flags"] = driver_flags(work / f"{unit}.command.json", work, digest)
         direct.update(c_symbols(work / f"{unit}.o", "undefined"))
@@ -154,7 +189,8 @@ def main():
     if {"madvise", "posix_madvise"} & (direct | linked):
         raise ValueError("the optional page-residency advice must compile out")
     observed.update(dependencies=sorted(dependencies), direct_c_symbols=sorted(direct),
-                    linked_c_symbols=sorted(linked), imports=imports(module))
+                    linked_c_symbols=sorted(linked), imports=imports(module), memory_limits=memory_limits(module),
+                    memory_growth=growth_sites(module))
     Path(report).write_text(json.dumps(observed, indent=2) + "\n")
     check_inventory(observed, json.loads(BASELINE.read_text()))
     validate_instructions(module, work / "audit.cwasm")

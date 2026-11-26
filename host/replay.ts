@@ -1,19 +1,23 @@
 /** Fresh instances and deterministic replay of the verifier's process calls. */
 
 import type { CallSnapshot, InputFile, Lookup } from "./namespace.js";
-import { GuestExit, PREVIEW1, WasiFault, WasiPreview1 } from "./wasi.js";
+import { BASELINE_LIMITS, lowerLimits, PAGE_BYTES } from "./limits.js";
+import type { RunLimits } from "./limits.js";
+import { GuestExit, OutputBudget, PREVIEW1, WasiFault, WasiPreview1 } from "./wasi.js";
 import type { StagePipe } from "./wasi.js";
 
 const PORT = "fpv_port";
 const MAX_EVENTS = 65536;
 const encoder = new TextEncoder();
 const failed = encoder.encode("NOT CHECKED: internal-stage\n");
+let activeCalls = 0;
 
 export type Hasher = { update(bytes: Uint8Array): void; digest(): string };
 export type CreateSha256 = () => Hasher;
 type Word = number | bigint;
 type Field = string | Word | Uint8Array;
-type Failure = "abi" | "trap" | "replay-mismatch" | "input-limit" | "output-limit" | "host-io" | "host-internal";
+type Failure = "abi" | "trap" | "replay-mismatch" | "invalid-input" | "input-limit" | "output-limit"
+  | "memory-limit" | "runtime-oom" | "busy" | "host-io" | "host-internal";
 
 export type GuestResult = Readonly<{
   status: number;
@@ -24,13 +28,20 @@ export type GuestResult = Readonly<{
 
 class ReplayMismatch extends Error {}
 
+class MemoryFault extends Error {
+  constructor(readonly code: "memory-limit" | "runtime-oom") {
+    super(code);
+  }
+}
+
 function classify(error: unknown): Failure {
   if (error instanceof ReplayMismatch) return "replay-mismatch";
   if (error instanceof WasiFault) return error.code;
+  if (error instanceof MemoryFault) return error.code;
   if (error instanceof WebAssembly.RuntimeError) return "trap";
   if (error instanceof WebAssembly.LinkError) return "abi";
   const code = (error as { code?: unknown } | null)?.code;
-  if (code === "input-limit" || code === "output-limit" || code === "host-io") return code;
+  if (code === "invalid-input" || code === "input-limit" || code === "output-limit" || code === "host-io") return code;
   return "host-internal";
 }
 
@@ -135,6 +146,8 @@ class InstanceRun {
       return memory;
     }, {
       clock: () => this.#clock(),
+      output: call.output,
+      discardPrefix: prefix !== undefined,
       observe: {
         span: bytes => {
           if (!this.#journal.active) return;
@@ -162,15 +175,35 @@ class InstanceRun {
         || !Object.hasOwn(imports[entry.module], entry.name)) throw new WasiFault("unaudited guest import");
     }
     try {
-      this.#instance = new WebAssembly.Instance(this.call.module, imports);
+      try {
+        this.#instance = new WebAssembly.Instance(this.call.module, imports);
+      } catch (error) {
+        if (error instanceof RangeError) throw new MemoryFault("runtime-oom");
+        throw error;
+      }
+      const { memory, fpv_set_memory_limit: configure, fpv_memory_failure: memoryFailure } = this.#instance.exports;
+      if (!(memory instanceof WebAssembly.Memory) || typeof configure !== "function"
+        || typeof memoryFailure !== "function") throw new WasiFault("missing guest memory boundary");
+      const stagesRunHere = this.prefix || this.call.stages === 0;
+      const pages = stagesRunHere ? this.call.limits.childPages : this.call.limits.parentPages;
+      if (memory.buffer.byteLength > pages * PAGE_BYTES) throw new MemoryFault("memory-limit");
+      if (configure(pages) !== 0) throw new WasiFault("guest memory limit setup failed");
       const start = this.#instance.exports._start;
       if (typeof start !== "function") throw new WasiFault("missing guest entry point");
       let status = 0;
       try {
         start();
       } catch (error) {
-        if (!(error instanceof GuestExit)) throw error;
-        status = error.status;
+        if (error instanceof GuestExit) {
+          status = error.status;
+        } else {
+          if (error instanceof WebAssembly.RuntimeError) {
+            const reason = memoryFailure();
+            if (reason === 1) throw new MemoryFault("memory-limit");
+            if (reason === 2) throw new MemoryFault("runtime-oom");
+          }
+          throw error;
+        }
       }
       if (this.prefix && (!this.#childPipe || !this.#redirected)) {
         throw new ReplayMismatch("child ended before the selected branch");
@@ -179,9 +212,10 @@ class InstanceRun {
         && (this.#ordinal !== this.call.stages || this.#pending || this.#wait.size)) {
         throw new WasiFault("parent ended before stage completion");
       }
-      return { status, ...this.#wasi.streams() };
+      return { status, ...this.#wasi.takeStreams() };
     } finally {
       this.#instance = undefined;
+      this.#wasi.discardStreams();
     }
   }
 
@@ -283,11 +317,13 @@ class InstanceRun {
 class ReplayCall {
   failure: Failure | null = null;
   readonly stages: number;
+  readonly output: OutputBudget;
 
   constructor(readonly module: WebAssembly.Module, readonly snapshot: CallSnapshot,
-              readonly createSha256: CreateSha256) {
+              readonly createSha256: CreateSha256, readonly limits: RunLimits) {
     const mode = snapshot.argv[1];
     this.stages = mode === "-plan" ? 0 : mode === "-key" || mode === "-leaf" ? 1 : 3;
+    this.output = new OutputBudget(limits.outputBytes);
   }
 
   clock(): bigint {
@@ -295,13 +331,49 @@ class ReplayCall {
   }
 }
 
-export function replayGuest(module: WebAssembly.Module, snapshot: CallSnapshot, createSha256: CreateSha256): GuestResult {
-  const call = new ReplayCall(module, snapshot, createSha256);
+function run(module: WebAssembly.Module, snapshot: CallSnapshot, createSha256: CreateSha256,
+             limits: RunLimits): GuestResult {
+  const call = new ReplayCall(module, snapshot, createSha256, limits);
   try {
     const result = new InstanceRun(call).run();
     if (!call.failure) return { ...result, failure: null };
   } catch (error) {
     call.failure ??= classify(error);
   }
-  return { status: 5, stdout: failed.slice(), stderr: new Uint8Array(0), failure: call.failure };
+  return refusal(call.failure ?? "host-internal");
+}
+
+function refusal(failure: Failure): GuestResult {
+  return { status: 5, stdout: failed.slice(), stderr: new Uint8Array(0), failure };
+}
+
+export function replayGuest(module: WebAssembly.Module, capture: () => CallSnapshot,
+                            createSha256: CreateSha256, overrides: Partial<RunLimits> = {}): GuestResult {
+  if (activeCalls >= BASELINE_LIMITS.concurrentCalls) return refusal("busy");
+  activeCalls++;
+  try {
+    let limits: RunLimits;
+    try {
+      limits = lowerLimits(overrides);
+    } catch {
+      return refusal("invalid-input");
+    }
+    const snapshot = capture();
+    let result: GuestResult;
+    try {
+      result = run(module, snapshot, createSha256, limits);
+    } catch (error) {
+      result = refusal(classify(error));
+    }
+    try {
+      snapshot.namespace.close?.();
+    } catch (error) {
+      if (!result.failure) return refusal(classify(error));
+    }
+    return result;
+  } catch (error) {
+    return refusal(classify(error));
+  } finally {
+    activeCalls--;
+  }
 }

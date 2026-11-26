@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -67,6 +67,9 @@ replay-transport-test: test ## test Node replay events, pipes and wait status
 
 replay-test: conformance replay-transport-test ## compare Node whole calls with the pinned native reference
 	@python3 -B -m conformance.node_replay_c1
+
+memory-limit-test: bootstrap replay-transport-test ## test Node admission and genuine Wasm resource faults
+	@bash conformance/wasm-memory-test.sh
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
 	@scripts/not-yet.sh $@ M4

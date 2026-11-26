@@ -37,5 +37,6 @@ Build checks track the transitive compilation inputs, platform dependencies and 
 | WASI descriptor and path calls | wasi-libc stdio, file metadata and input reads | Supply read-only virtual files and bounded output. The [restricted adapter contract](../../host/wasmtime/README.md) and `make wasm-io-test` cover layout, denied capabilities and pointer checks. |
 | Node CLI file and directory reads | CLI disk adapter behind the same WASI path imports | Anchor Linux files and directories with `O_PATH` and procfs. `make scoped-disk-test` checks native input order, and `make test` checks symlink and replacement handling. [ADR 0007](../adr/0007-cli-disk-capabilities.md) |
 | WASI process exit | wasi-libc termination | The host captures status and preserves the failure boundary. |
+| `sbrk`, `memory.grow` and C allocation | wasi-libc heap growth and library allocation | The port admits positive whole-page growth and traps on failed growth or nonzero allocation. The linked memory has a maximum and the build checks every growth site. `make memory-limit-test` exercises the host latch with real Wasm faults. |
 
 The build checks every resolved dependency and the actual ABI subset against the reviewed [port inventory](../../port/audit.json). [Build evidence](../rfcs/RFC-0001-build-and-source.md#testing-strategy)

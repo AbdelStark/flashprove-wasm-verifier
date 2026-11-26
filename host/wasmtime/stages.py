@@ -17,7 +17,8 @@ from .wasi import (
 PORT = "fpv_port"
 FAILED = b"NOT CHECKED: internal-stage\n"
 PIPE_TYPE = 0  # Preview 1 has no dedicated pipe file type.
-MAX_PAGES = (1 << 16) - 1
+MAX_PAGES = 57344
+PARENT_PAGES = 2048
 _active = Lock()  # Wasmtime's Python callbacks share exception state within the process.
 
 
@@ -214,7 +215,7 @@ class ProcessHost(Wasi):
 
 class PartRunner:
     def __init__(self, module_path, *, clock=monotonic_ns, max_pages=MAX_PAGES, parent_pages=None, observe=None):
-        self.parent_pages = max_pages if parent_pages is None else parent_pages
+        self.parent_pages = min(max_pages, PARENT_PAGES) if parent_pages is None else parent_pages
         if not all(1 <= pages <= MAX_PAGES for pages in (max_pages, self.parent_pages)):
             raise ValueError("invalid Wasmtime page limit")
         config = wasmtime.Config()
@@ -229,13 +230,17 @@ class PartRunner:
 
     def start(self, host):
         with wasmtime.Store(self.engine) as store, wasmtime.Linker(self.engine) as linker:
-            pages = self.parent_pages if host.expected is None else self.max_pages
+            runs_stage = host.expected is not None or host.argv[1:2] == (b"-plan",)
+            pages = self.max_pages if runs_stage else self.parent_pages
             store.set_limits(memory_size=pages << 16, instances=1, memories=1)
             host.link(linker, self.module)
             if self.observe is not None:
                 self.observe(host.expected, "before", 0)
             instance = linker.instantiate(store, self.module)
             exports = instance.exports(store)
+            configure = exports.get("fpv_set_memory_limit")
+            if configure is not None and configure(store, pages) != 0:
+                raise GuestFault("guest memory limit setup failed")
             if self.observe is not None:
                 self.observe(host.expected, "start", exports["memory"].size(store))
             try:

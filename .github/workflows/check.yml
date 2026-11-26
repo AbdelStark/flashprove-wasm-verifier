@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: make replay-test
+      - run: make replay-test memory-limit-test
       - name: Check scoped CLI reads
         run: node conformance/cli-input-test.mjs
   native-c1:

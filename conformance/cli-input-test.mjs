@@ -5,38 +5,17 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { captureCliInputs } from "../build/ts/host/cli-input.js";
-import { GuestExit, PREVIEW1, WasiPreview1 } from "../build/ts/host/wasi.js";
+import { runNodeGuest } from "../build/ts/host/node-replay.js";
 
 const native = resolve("build/native/cp_verify");
 const module = new WebAssembly.Module(readFileSync("build/wasm/cp_verify.wasm"));
-const port = Object.fromEntries(WebAssembly.Module.imports(module).filter(entry => entry.module === "fpv_port")
-  .map(entry => [entry.name, () => { throw new Error("unexpected stage in CLI input test"); }]));
-
-function runGuest(args, dir) {
-  const snapshot = captureCliInputs(args, dir);
-  try {
-    let instance;
-    const host = new WasiPreview1(snapshot, () => instance.exports.memory);
-    instance = new WebAssembly.Instance(module, { [PREVIEW1]: host.imports, fpv_port: port });
-    let status = 0;
-    try {
-      instance.exports._start();
-    } catch (error) {
-      if (!(error instanceof GuestExit)) throw error;
-      status = error.status;
-    }
-    return { status, ...host.streams() };
-  } finally {
-    snapshot.namespace.close();
-  }
-}
-
 function check(label, args, dir, status, verdict) {
   const oracle = spawnSync(native, args, { cwd: dir });
   if (oracle.error) throw oracle.error;
   assert.equal(oracle.status, status, label);
   if (verdict) assert.equal(oracle.stdout.toString().trimEnd().split("\n").at(-1), verdict, label);
-  const guest = runGuest(args, dir);
+  const guest = runNodeGuest(module, () => captureCliInputs(args, dir));
+  assert.equal(guest.failure, null, label);
   assert.equal(guest.status, status, label);
   assert.ok(oracle.stdout.equals(guest.stdout), `${label}: stdout differs`);
   assert.ok(oracle.stderr.equals(guest.stderr), `${label}: stderr differs`);

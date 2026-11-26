@@ -20,17 +20,17 @@ trap 'rm -r -- "$work"' EXIT
 prepare_wasm_source "$work"
 cd "$work/verifier/src"
 compile=("${wasm_flags[@]}" "-ffile-prefix-map=$work=." "-DVF_SOURCE_DIGEST=\"$digest\"")
-sources=(cp_verify.cpp "$ROOT/port/baseline.cpp" "$ROOT/port/process.cpp")
+sources=(cp_verify.cpp "$ROOT/port/baseline.cpp" "$ROOT/port/process.cpp" "$ROOT/port/memory.cpp")
 for src in "${sources[@]}"; do
   name=${src##*/}
   name=${name%.cpp}
   "$wasm_cxx" "${compile[@]}" -MD -MT "$name" -MF "$work/$name.d" \
     -MJ "$work/$name.command.json" -c "$src" -o "$work/$name.o"
 done
-"$wasm_cxx" -fwasm-exceptions "$work/cp_verify.o" "$work/baseline.o" "$work/process.o" \
-  "${wasm_link[@]}" -o "$work/cp_verify.wasm"
+"$wasm_cxx" -fwasm-exceptions "$work/cp_verify.o" "$work/baseline.o" "$work/process.o" "$work/memory.o" \
+  "${wasm_link[@]}" "${wasm_memory_link[@]}" -o "$work/cp_verify.wasm"
 python3 "$ROOT/scripts/audit_wasm.py" "$work" "$digest" "$out/audit-observed.json" \
-  -fwasm-exceptions "${wasm_link[@]}"
+  -fwasm-exceptions "${wasm_link[@]}" "${wasm_memory_link[@]}"
 printf '%s\n' "$digest" > "$work/source.sha256"
 printf '%s\n' "$port" > "$work/port.sha256"
 mv "$work/source.sha256" "$work/port.sha256" "$work/cp_verify.wasm" "$out/"

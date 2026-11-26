@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { RunLimits } from "./limits.js";
 import type { CallSnapshot } from "./namespace.js";
 import { replayGuest } from "./replay.js";
 
@@ -10,6 +11,6 @@ function createSha256() {
   };
 }
 
-export function runNodeGuest(module: WebAssembly.Module, snapshot: CallSnapshot) {
-  return replayGuest(module, snapshot, createSha256);
+export function runNodeGuest(module: WebAssembly.Module, capture: () => CallSnapshot, limits?: Partial<RunLimits>) {
+  return replayGuest(module, capture, createSha256, limits);
 }

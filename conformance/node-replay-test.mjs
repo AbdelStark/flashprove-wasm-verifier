@@ -46,7 +46,7 @@ test("three ordinal replays run one child each and transport independent pipe by
     opens++;
     return file("A");
   });
-  const result = runNodeGuest(module, call);
+  const result = runNodeGuest(module, () => call);
   assert.equal(result.failure, null);
   assert.equal(result.status, 0);
   assert.equal(decode(result.stdout), "PZ");
@@ -56,7 +56,7 @@ test("three ordinal replays run one child each and transport independent pipe by
 
 test("a changed file rejects before the replayed stage", () => {
   let opens = 0;
-  refusal(runNodeGuest(module, snapshot(() => file(++opens === 1 ? "A" : "B"))), "replay-mismatch");
+  refusal(runNodeGuest(module, () => snapshot(() => file(++opens === 1 ? "A" : "B"))), "replay-mismatch");
 });
 
 test("a changed pre-fork descriptor event rejects before closing the descriptor", () => {
@@ -67,7 +67,7 @@ test("a changed pre-fork descriptor event rejects before closing the descriptor"
         imports[PREVIEW1].fd_close = fd => close(fd + 1);
       }
     },
-  }, () => refusal(runNodeGuest(module, snapshot(() => file("A"))), "replay-mismatch"));
+  }, () => refusal(runNodeGuest(module, () => snapshot(() => file("A"))), "replay-mismatch"));
 });
 
 test("replay rejects an unexpected operand before it enters the namespace", () => {
@@ -77,7 +77,7 @@ test("replay rejects an unexpected operand before it enters the namespace", () =
       if (ordinal === 2) new Uint8Array(memory.buffer, 300, 4).set(encode("else"));
     },
   }, () => {
-    refusal(runNodeGuest(module, snapshot(path => {
+    refusal(runNodeGuest(module, () => snapshot(path => {
       assert.equal(path, "/file");
       calls++;
       return file("A");
@@ -95,7 +95,7 @@ test("a trap supplies signal 6 and takes precedence over the parent's refusal", 
         imports[PREVIEW1].proc_exit = status => { parentStatus = status; exit(status); };
       }
     },
-  }, () => refusal(runNodeGuest(module, snapshot(() => file("T"))), "trap"));
+  }, () => refusal(runNodeGuest(module, () => snapshot(() => file("T"))), "trap"));
   assert.equal(parentStatus, 1);
 });
 
@@ -110,5 +110,5 @@ test("parent waits consume a known status exactly once", () => {
         };
       }
     },
-  }, () => refusal(runNodeGuest(module, snapshot(() => file("A"))), "abi"));
+  }, () => refusal(runNodeGuest(module, () => snapshot(() => file("A"))), "abi"));
 });
