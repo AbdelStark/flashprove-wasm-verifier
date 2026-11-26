@@ -6,7 +6,7 @@ The TypeScript namespace snapshots caller-owned bytes and the complete guest arg
 
 The CLI acquisition adapter admits explicit file operands and the allowed configuration and public-key descendants on first guest access. It anchors files and directories on Linux x64 and arm64 with procfs. `make scoped-disk-test` checks native read order with the pinned guest and oracle on x86_64 Linux. [Disk capability decision](../docs/adr/0007-cli-disk-capabilities.md)
 
-The TypeScript host (M2): it loads the module, serves the call's files from memory (R-SYS-1), runs one instance per stage with fork by replay (R-STG-2), enforces size and memory limits (R-MEM-2) and maps every abnormal ending to `NOT CHECKED` (R-EQ-4).
+The Node runner starts a fresh WebAssembly instance for the parent and each serial child. It checks ordered argument, file and descriptor observations before entering a child branch, then delivers pipe bytes and wait words to the upstream parent. `make replay-test` exercises the transport and compares all published whole calls against the pinned native verifier on x86_64 Linux.
 
 Two front ends share it:
 
