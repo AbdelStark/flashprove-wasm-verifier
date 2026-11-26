@@ -56,7 +56,7 @@ m1-conformance: ## require the port audit, C3, C4 and Wasmtime C1 part calls and
 node-gate-test: ## test the Node conformance evidence and prerequisite checks
 	@python3 -B -m unittest conformance.node_differential_test
 
-conformance: ## require M1 gates and compare Node C1 and C6 with pinned native
+conformance: ## require M1 gates and compare Node C1, C2 and C6 with pinned native
 	+@python3 -B -m conformance.node_differential "$(MAKE)"
 
 memory-probe: m1-conformance ## measure full-size native RSS and Wasmtime stage pages

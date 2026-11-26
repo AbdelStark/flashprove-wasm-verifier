@@ -5,11 +5,13 @@ from hashlib import sha256
 from pathlib import Path
 import os
 import re
+from shutil import copyfile, copytree
 import signal
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
+from conformance.altered import AlteredCase, TABLES, altered_cases
 from conformance.compare import Case, RunResult, compare, first_byte_difference, lines, load_exclusions
 from conformance.evidence import write_json
 from conformance.m1 import lock_value, m1, read_json
@@ -26,6 +28,7 @@ class Invocation:
     args: list[str]
     expected: tuple[int, str] | None = None
     full_streams: bool = False
+    mutation: AlteredCase | None = None
 
 
 def published_cases():
@@ -71,6 +74,14 @@ def argument_cases():
         yield Invocation(Case(f"threads-{threads}", "C6", "key"), [*key, "-j", str(threads)])
 
 
+def mutation_cases(root):
+    for row in altered_cases(root):
+        _, args, _, _ = next(cases(f"examples/{row.fixture}", FIXTURES[row.fixture]))
+        args[args.index("-id") + 1] = row.commitment
+        case = Case(f"{Path(row.table).stem}/line-{row.line}", "C2", "whole")
+        yield Invocation(case, args, (1, row.expected), mutation=row)
+
+
 def run(command, cwd):
     with subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           start_new_session=True) as proc:
@@ -91,22 +102,47 @@ def run_pair(root, args, cwd):
     return native, guest
 
 
+def rejection_name(result, known):
+    output = lines(result.stdout)
+    if result.status == 1 and output:
+        last = output[-1].removesuffix(b"\n")
+        if last.startswith(b"NO: ") and last[4:] in known:
+            return last[4:].decode("ascii")
+    return None
+
+
 def execute_case(root, directory, invocation, exclusions):
     case = invocation.case
     cwd = directory / case.corpus / case.id
     cwd.mkdir(parents=True)
-    (cwd / "examples").symlink_to(root / ".upstream/FlashProve/examples", target_is_directory=True)
+    examples = root / ".upstream/FlashProve/examples"
+    row = invocation.mutation
+    if row is None:
+        (cwd / "examples").symlink_to(examples, target_is_directory=True)
+    else:
+        fixture = cwd / "examples" / row.fixture
+        copytree(examples / row.fixture, fixture, copy_function=copyfile)
+        for target, data in row.changed.items():
+            (fixture / target).write_bytes(data)
     native, guest = run_pair(root, invocation.args, cwd)
     outputs = root / "build/node-conformance" / case.corpus / case.id
     outputs.mkdir(parents=True, exist_ok=True)
     for runtime, result in (("native", native), ("node", guest)):
         (outputs / f"{runtime}.stdout").write_bytes(result.stdout)
         (outputs / f"{runtime}.stderr").write_bytes(result.stderr)
+    oracle_matches = True
     if invocation.expected is not None:
         status, verdict = invocation.expected
-        if native.status != status or native.stdout.splitlines()[-1:] != [verdict.encode("ascii")]:
+        oracle_matches = native.status == status and native.stdout.splitlines()[-1:] == [verdict.encode("ascii")]
+        if not oracle_matches and row is None:
             raise ValueError("published oracle did not match its expected outcome")
     result = compare(native, guest, case, exclusions)
+    if row is not None:
+        known = frozenset((examples.parent / "verifier/src/vf_rejection_names.txt").read_bytes().splitlines())
+        result.update(oracleMatches=oracle_matches, expectedRejection=row.expected.removeprefix("NO: "),
+                      nativeRejection=rejection_name(native, known), guestRejection=rejection_name(guest, known),
+                      provenance={"fixtureId": row.fixture, "table": row.table, "tableSha256": row.table_sha256,
+                                  "line": row.line, "target": row.target})
     if result["equal"] and (invocation.full_streams or native.status == 2):
         difference = first_byte_difference("stdout", lines(native.stdout), lines(guest.stdout), exclusions)
         difference = difference or first_byte_difference("stderr", lines(native.stderr), lines(guest.stderr), exclusions)
@@ -121,6 +157,8 @@ def corpus_gate(root, directory, report, corpus, invocations, exclusions):
     gate["state"] = "failed"
     counts = dict.fromkeys(MODES.values(), 0)
     counts.update(nativeVerdicts={}, guestVerdicts={})
+    if corpus == "C2":
+        counts.update(tables=dict.fromkeys(TABLES, 0), oracleDifferences=0)
     report["counts"][corpus] = counts
     equal = True
     seen = set()
@@ -138,6 +176,9 @@ def corpus_gate(root, directory, report, corpus, invocations, exclusions):
             return False
         report["cases"].append(result)
         counts[MODES[case.mode]] += 1
+        if corpus == "C2":
+            counts["tables"][result["provenance"]["table"]] += 1
+            counts["oracleDifferences"] += int(not result["oracleMatches"])
         for counter, value in (("nativeVerdicts", result["nativeVerdict"]), ("guestVerdicts", result["guestVerdict"])):
             verdict = (value or "no-verdict").split(":", 1)[0]
             counts[counter][verdict] = counts[counter].get(verdict, 0) + 1
@@ -145,7 +186,7 @@ def corpus_gate(root, directory, report, corpus, invocations, exclusions):
             report["equalityDifferences"] += 1
             gate.setdefault("firstDifference", {"caseId": case.id, **result["firstDifference"]})
             equal = False
-        details = result.get("firstDifference", result.get("guestVerdict"))
+        details = result.get("firstDifference", result.get("guestRejection") or result["guestVerdict"])
         print(f"Node {corpus}: {case.id} ({case.mode}) exit={result['guestExit']} {details or 'no verdict'}", flush=True)
         if result["safetyViolation"]:
             report["safetyViolations"] += 1
@@ -154,11 +195,33 @@ def corpus_gate(root, directory, report, corpus, invocations, exclusions):
     if not seen:
         gate["reason"] = "missing-cases"
         return False
+    if corpus == "C2":
+        if counts["tables"] != {table: count for table, (_, count) in TABLES.items()}:
+            gate["reason"] = "missing-cases"
+            return False
+        if counts["oracleDifferences"]:
+            gate["reason"] = "upstream-oracle-mismatch"
+            return False
     if equal:
         gate["state"] = "passed"
     else:
         gate["reason"] = "equality-difference"
     return equal
+
+
+def mutation_gate(root, directory, report, exclusions):
+    try:
+        passed = corpus_gate(root, directory, report, "C2", mutation_cases(root), exclusions)
+    except (OSError, ValueError):
+        report["gates"]["C2"] = {"state": "failed", "reason": "invalid-or-incomplete-upstream-table"}
+        passed = False
+    if not passed:
+        actual = report["counts"].get("C2", {}).get("tables", {})
+        missing = {table: count - actual.get(table, 0) for table, (_, count) in TABLES.items()
+                   if actual.get(table, 0) < count}
+        if missing:
+            report["gates"]["C2"]["missingRows"] = missing
+    return passed
 
 
 def prerequisites(root, make, report):
@@ -202,7 +265,7 @@ def differential(root, make):
     destination.unlink(missing_ok=True)
     report = {"schema": 1, "runtime": {"name": "node"}, "cases": [], "counts": {}, "status": "failed",
               "equalityDifferences": 0, "safetyViolations": 0,
-              "gates": {name: {"state": "not-run"} for name in ("prerequisites", "C3", "C4", "C1", "C6")}}
+              "gates": {name: {"state": "not-run"} for name in ("prerequisites", "C3", "C4", "C1", "C6", "C2")}}
     with TemporaryDirectory(prefix=".node-conformance-", dir=build) as temporary:
         directory = Path(temporary)
         try:
@@ -211,8 +274,10 @@ def differential(root, make):
                 c1 = corpus_gate(root, directory, report, "C1", published_cases(), exclusions)
                 if not report["safetyViolations"]:
                     c6 = corpus_gate(root, directory, report, "C6", argument_cases(), exclusions)
-                    if c1 and c6:
-                        report["status"] = "passed"
+                    if not report["safetyViolations"]:
+                        c2 = mutation_gate(root, directory, report, exclusions)
+                        if c1 and c6 and c2:
+                            report["status"] = "passed"
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
             report["gates"]["prerequisites"] = {"state": "failed", "reason": "missing-or-invalid-evidence"}
         finally:

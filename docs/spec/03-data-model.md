@@ -49,7 +49,8 @@ ConformanceReportV1 = {schema: 1, upstreamCommit, toolchainSha256, moduleSha256,
   runtime, cases: CaseResultV1[], counts, safetyViolations, equalityDifferences,
   status?, gates?}
 CaseResultV1 = {schema: 1, caseId, corpus, mode, nativeExit, guestExit, nativeVerdict,
-  guestVerdict, equal, safetyViolation, firstDifference?, hostFailure?, seed?}
+  guestVerdict, equal, safetyViolation, firstDifference?, hostFailure?, seed?,
+  expectedRejection?, nativeRejection?, guestRejection?, oracleMatches?, provenance?}
 RegressionV1 = {schema: 1, caseId, upstreamCommit, fixtureId, args, generatorVersion,
   operations, seed?, rule, stage, firstDifference, provenance}
 ReleaseManifestV1 = {schema: 1, version, sourceCommit, upstreamCommit, abi: 1,
@@ -59,3 +60,5 @@ ReleaseManifestV1 = {schema: 1, version, sourceCommit, upstreamCommit, abi: 1,
 Artifacts use UTF-8 JSON, decimal strings for counters above the safe integer range, sorted keys for deterministic publication and finite nonnegative numeric counts. A reader rejects unknown schema versions. Optional fields are omitted when absent. Paths in release manifests are unique relative paths. Regression descriptors point at checksum-checked fixtures and contain deterministic mutation instructions. [Reporting and privacy](05-observability.md#conformance-evidence) · [Release artifacts](09-release-and-versioning.md#release-artifacts)
 
 A failed conformance report can omit provenance that was unavailable at the failing gate. Gate states are `passed`, `failed` or `not-run`. A gate can include the exit status, a bounded failure reason and the first difference location.
+
+C2 case provenance gives the fixture ID, source table name and SHA-256, physical line and mutation target. It also records the expected rejection, whether native matched it, and each runner's rejection name when that name appears in the pinned registry.

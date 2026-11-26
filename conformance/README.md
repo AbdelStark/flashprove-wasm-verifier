@@ -12,6 +12,8 @@ The Wasmtime C1 gate compares the exact part-call closing records and both compl
 
 `make conformance` runs the M1 gate afresh, then compares the full C1 matrix and the C6 argument matrix through `bin/fpv` on Node 24. Each pair uses the same argument vector and a case directory linked to the verified examples. C6 covers IDs, policies, work, next token, bits and thread bounds, and argument order. The representative whole call at `-j 1` compares both streams with the approved stage wall time exclusion.
 
+C2 uses the pinned upstream generator for all three altered-proof tables. It copies the two small fixtures into per-case scratch directories and checks the exact exit and rejection line. A complete run has 10 default-policy rows, 10 clipped-gap rows and 79 item rows. Each C2 case records its fixture, table and table hash, physical row number, target and known rejection names. Missing rows and a native result that disagrees with the pinned table both fail the gate.
+
 CI retains `build/conformance-m1.json` and `build/conformance-node.json` even when a gate fails. Reports include pins, runtime, module digest, mode and verdict counts, first difference locations and gate status. Raw streams and numeric dumps stay in their local build directories.
 
 On x86_64 Linux, `make memory-probe` measures both full-size published whole calls at `-j 1`. The bounded Wasmtime measurement adapter compares each call's closing record against native and checks refusal under a smaller request cap. The report separates per-process native RSS, guest linear pages and Wasmtime host mappings. [Memory measurement protocol](../docs/adr/0006-full-size-memory-envelope.md)
