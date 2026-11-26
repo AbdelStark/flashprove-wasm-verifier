@@ -58,7 +58,7 @@ Run upstream Goldilocks vectors and exact hash answers, including high operands 
 
 ## Open Questions
 
-- OPEN QUESTION: Does the pinned math library match every C1 table entry? The M1 numerical-parity owner resolves this by the M1 gate with C4 and a math ADR. If a mismatch appears, the gate stays closed until the ADR's remedy passes the sweep and C4.
+- The M1 table comparison and math decision are recorded in [ADR 0005](../adr/0005-public-table-parity.md).
 
 ## References
 
