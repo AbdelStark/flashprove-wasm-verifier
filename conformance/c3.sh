@@ -20,4 +20,4 @@ for src in "${shared[@]}"; do
   "$wasm_cxx" "${wasm_flags[@]}" "-I$work/verifier/src" "$src" "${wasm_link[@]}" -o "$work/${name%.cpp}.wasm"
 done
 
-python3 -B "$ROOT/conformance/c3.py" "$work"
+(cd "$ROOT" && python3 -B -m conformance.c3 "$work" "$@")

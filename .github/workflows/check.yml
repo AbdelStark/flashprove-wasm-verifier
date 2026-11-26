@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Repository checks
-        run: make check comparator-test
+        run: make check comparator-test m1-gate-test
       - name: Fetch and verify the upstream pin
         run: make upstream
       - name: Fetch and verify the toolchain pin
@@ -20,4 +20,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: make native-c1 wasm-build-test wasm-audit-test wasm-io-test conformance
+      - run: make native-c1
+  m1-conformance:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: make conformance
+      - name: Retain redacted M1 conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-m1
+          path: build/conformance-m1.json
+          if-no-files-found: error

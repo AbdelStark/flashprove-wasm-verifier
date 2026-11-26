@@ -1,11 +1,11 @@
 """Compare C1 part calls and plans in Wasmtime with the native oracle."""
 
-import json
 from pathlib import Path
 import subprocess
 import sys
 
 from conformance.compare import Case, RunResult, compare, load_exclusions
+from conformance.evidence import write_json
 from conformance.native_c1 import BUILD, FIXTURES, UPSTREAM, cases
 from host.wasmtime.stages import FAILED, PartRunner, Result
 
@@ -54,7 +54,10 @@ def main():
     if sys.argv[1:] == ["--thread-boundaries"]:
         thread_boundaries(runner)
         return
-    if sys.argv[1:]:
+    evidence = None
+    if len(sys.argv) == 3 and sys.argv[1] == "--evidence":
+        evidence = Path(sys.argv[2])
+    elif sys.argv[1:]:
         raise SystemExit("unknown part-call test option")
     exclusions = load_exclusions()
     parts = plans = 0
@@ -77,7 +80,9 @@ def main():
             result = compare(RunResult(native.returncode, native.stdout, native.stderr),
                              RunResult(guest.status, guest.stdout, guest.stderr, failure),
                              Case(f"{family}/{stage}", "C1", mode), exclusions)
-            (out / f"{stage}.json").write_text(json.dumps(result, sort_keys=True) + "\n")
+            write_json(out / f"{stage}.json", result)
+            if evidence is not None:
+                write_json(evidence / f"{family}-{stage}.json", result)
             if result["safetyViolation"]:
                 raise SystemExit(f"Wasmtime C1 {family}/{stage}: safety violation. See local case record.")
             if not result["equal"]:

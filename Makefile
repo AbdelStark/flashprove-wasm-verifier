@@ -2,10 +2,10 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance fuzz test bench clean
 
 help: ## list targets
-	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 bootstrap: ## fetch the pinned wasi-sdk and Wasmtime into .toolchain/, hashes checked
 	@scripts/bootstrap.sh
@@ -38,12 +38,14 @@ wasm-io-test: build ## test the restricted Wasmtime I/O contract
 comparator-test: ## test conformance output comparison rules
 	@python3 -B -m unittest conformance.compare_test
 
-conformance: build reference comparator-test ## run C1 part calls and plans, C3 and C4
-	@conformance/c3.sh
-	@conformance/c4.sh
-	@scripts/bootstrap-wasmtime-python.sh
+m1-gate-test: ## test M1 missing evidence and mismatch handling
+	@python3 -B -m unittest conformance.m1_test
+
+m1-prerequisites: reference wasm-build-test wasm-audit-test wasm-io-test comparator-test
 	@.toolchain/wasmtime-python/bin/python -B -m unittest conformance.wasmtime_stage_test
-	@.toolchain/wasmtime-python/bin/python -B -m conformance.wasmtime_c1
+
+conformance: ## require the port audit, C3, C4 and Wasmtime C1 part calls and plans
+	+@python3 -B -m conformance.m1 "$(MAKE)"
 
 fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 	@scripts/not-yet.sh $@ M2
