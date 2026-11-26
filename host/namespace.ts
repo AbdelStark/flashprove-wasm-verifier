@@ -2,9 +2,12 @@
 
 export const Errno = {
   success: 0,
+  acces: 2,
   badf: 8,
   inval: 28,
+  io: 29,
   isdir: 31,
+  loop: 32,
   mfile: 33,
   noent: 44,
   notdir: 54,
@@ -14,8 +17,8 @@ export const Errno = {
 } as const;
 
 export const MAX_PATH_BYTES = 4096;
-const MAX_FILE_BYTES = 64 * 2 ** 20;
-const MAX_INPUT_BYTES = 128 * 2 ** 20;
+export const MAX_FILE_BYTES = 64 * 2 ** 20;
+export const MAX_INPUT_BYTES = 128 * 2 ** 20;
 const MAX_ARGUMENT_BYTES = 2 ** 20;
 const MAX_ARGUMENTS = 4096;
 const MAX_PATH_METADATA_BYTES = 2 ** 20;
@@ -24,12 +27,13 @@ const encoder = new TextEncoder();
 
 export type InputFile = Readonly<{
   kind: "file";
-  size: number;
+  size: bigint;
   readInto(destination: Uint8Array, offset: bigint): number;
 }>;
 export type Lookup = InputFile | Readonly<{ kind: "directory" }> | Readonly<{ kind: "error"; errno: number }>;
 export interface CallNamespace {
   lookup(path: string): Lookup;
+  lookupOperand?(path: string, open: boolean): Lookup;
 }
 export type CallSnapshot = Readonly<{ argv: readonly string[]; namespace: CallNamespace }>;
 
@@ -85,6 +89,21 @@ function copyFile(value: Uint8Array, remaining: number): Uint8Array<ArrayBuffer>
   }
 }
 
+export function ownedFile(bytes: Uint8Array): InputFile {
+  return Object.freeze({
+    kind: "file",
+    size: BigInt(bytes.length),
+    readInto(destination: Uint8Array, offset: bigint) {
+      if (offset < 0n) throw new RangeError("negative file offset");
+      if (offset >= bytes.length) return 0;
+      const start = Number(offset);
+      const count = Math.min(destination.length, bytes.length - start);
+      destination.set(bytes.subarray(start, start + count));
+      return count;
+    },
+  });
+}
+
 class SnapshotNamespace implements CallNamespace {
   readonly #root = makeDirectory();
 
@@ -110,19 +129,7 @@ class SnapshotNamespace implements CallNamespace {
       if (current.children.has(name)) throw new InputError("invalid-input");
       const bytes = copyFile(value, MAX_INPUT_BYTES - total);
       total += bytes.length;
-      const file: InputFile = Object.freeze({
-        kind: "file",
-        size: bytes.length,
-        readInto(destination: Uint8Array, offset: bigint) {
-          if (offset < 0n) throw new RangeError("negative file offset");
-          if (offset >= bytes.length) return 0;
-          const start = Number(offset);
-          const count = Math.min(destination.length, bytes.length - start);
-          destination.set(bytes.subarray(start, start + count));
-          return count;
-        },
-      });
-      current.children.set(name, file);
+      current.children.set(name, ownedFile(bytes));
     }
   }
 

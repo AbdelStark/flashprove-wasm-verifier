@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -56,6 +56,9 @@ fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 test: ## type-check the TypeScript host and run its contract tests
 	@npm ci --ignore-scripts --no-audit --no-fund
 	@npm test
+
+scoped-disk-test: build reference test ## compare native and guest scoped input reads on Linux
+	@node conformance/cli-input-test.mjs
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
 	@scripts/not-yet.sh $@ M4
