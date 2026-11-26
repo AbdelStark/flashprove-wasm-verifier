@@ -12,7 +12,7 @@ Every shim answers one row of the port audit in SPEC.md § 6. A shim without a r
 
 `make build` emits `build/wasm/cp_verify.wasm` and the upstream and port digests. The baseline returns `NOT CHECKED: internal-stage` if a call reaches stage dispatch while process transport is pending. `pipe` and `dup2` return `ENOSYS` in wasi-libc. The port supplies the same result for `fork` and `waitpid`.
 
-The linked module imports WASI Preview 1 only. The SDK currently links `environ_get`, `environ_sizes_get` and `random_get`. The restricted host will supply an empty environment and deny ambient randomness.
+The linked module imports WASI Preview 1 only. The [restricted Wasmtime adapter](../host/wasmtime/README.md) supplies an empty environment and denies ambient randomness.
 
 `make wasm-build-test` uses the log from `make reference` on x86_64 Linux to compare source digests. It checks the accepted and rejected `-j` boundaries and exercises the unmodified worker and reader fallback code in a separate probe.
 

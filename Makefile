@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test conformance fuzz test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -30,6 +30,10 @@ wasm-build-test: build ## test the Wasm build digest, fallback paths and thread 
 
 wasm-audit-test: build ## test that the port audit rejects unaudited build inputs
 	@python3 -B conformance/wasm-audit-test.py
+
+wasm-io-test: build ## test the restricted Wasmtime I/O contract
+	@scripts/bootstrap-wasmtime-python.sh
+	@.toolchain/wasmtime-python/bin/python -B -m unittest conformance.wasmtime_io_test
 
 conformance: build ## run differential conformance, currently corpora C3 and C4
 	@conformance/c3.sh
