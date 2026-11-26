@@ -31,8 +31,9 @@ wasm-build-test: build ## test the Wasm build digest, fallback paths and thread 
 wasm-audit-test: build ## test that the port audit rejects unaudited build inputs
 	@python3 -B conformance/wasm-audit-test.py
 
-conformance: build ## run differential conformance, currently corpus C3
+conformance: build ## run differential conformance, currently corpora C3 and C4
 	@conformance/c3.sh
+	@conformance/c4.sh
 
 fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 	@scripts/not-yet.sh $@ M2
