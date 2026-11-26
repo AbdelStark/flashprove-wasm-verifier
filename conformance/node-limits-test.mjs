@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { BASELINE_LIMITS, PAGE_BYTES } from "../build/ts/host/limits.js";
 import { captureCall, ownedFile } from "../build/ts/host/namespace.js";
 import { runNodeGuest } from "../build/ts/host/node-replay.js";
+import { NodeSupervisor } from "../build/ts/host/node-supervisor.js";
 
 const probe = new WebAssembly.Module(readFileSync("build/wasm-memory-probe.wasm"));
 const pipeProbe = new WebAssembly.Module(readFileSync("build/node-replay-test.wasm"));
@@ -85,4 +86,9 @@ test("an error releasing the call's input suppresses an otherwise complete resul
     argv: ["cp_verify", "-plan", "grow"],
     namespace: { lookup: () => { throw new Error("unexpected open"); }, close() { throw new Error("close failed"); } },
   })), "host-internal");
+});
+
+test("the supervisor times out a Wasm loop that never yields", async () => {
+  const supervisor = new NodeSupervisor();
+  expectFailure(await supervisor.run(probe, ["-plan", "spin"], { deadlineMs: 500 }), "timeout");
 });

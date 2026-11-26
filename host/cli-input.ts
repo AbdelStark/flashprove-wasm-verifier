@@ -3,7 +3,7 @@
 import { closeSync, constants, fstatSync, openSync, readSync, statfsSync } from "node:fs";
 import type { BigIntStats } from "node:fs";
 import { arch, cwd as currentDirectory, platform } from "node:process";
-import { captureCall, Errno, InputError, MAX_FILE_BYTES, MAX_INPUT_BYTES, ownedFile } from "./namespace.js";
+import { captureArguments, Errno, InputError, MAX_FILE_BYTES, MAX_INPUT_BYTES, ownedFile } from "./namespace.js";
 import type { CallNamespace, CallSnapshot, Lookup } from "./namespace.js";
 
 const O_PATH = 0o10000000;
@@ -254,6 +254,6 @@ class ScopedDiskNamespace implements CallNamespace {
 
 export function captureCliInputs(args: readonly string[], workingDirectory = currentDirectory()):
   CallSnapshot & { namespace: ScopedDiskNamespace } {
-  const { argv } = captureCall(new Map(), ["cp_verify", ...args]);
+  const argv = captureArguments(args, "cp_verify");
   return Object.freeze({ argv, namespace: new ScopedDiskNamespace(argv, workingDirectory) });
 }
