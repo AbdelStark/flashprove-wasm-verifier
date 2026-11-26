@@ -13,6 +13,10 @@ static int try_grow(intptr_t bytes) {
 
 int main(int argc, char **argv) {
   if (argc < 3) return 2;
+  if (!std::strcmp(argv[2], "spin")) {
+    volatile unsigned iterations = 0;
+    for (;;) iterations = iterations + 1;
+  }
   if (!std::strcmp(argv[2], "grow")) return try_grow(65536);
   if (!std::strcmp(argv[2], "engine-grow")) return try_grow(16 * 1024 * 1024);
   if (!std::strcmp(argv[2], "allocate")) {

@@ -6,6 +6,7 @@ export const BASELINE_LIMITS = Object.freeze({
   parentPages: 2048,
   childPages: 57344,
   outputBytes: 8 * 2 ** 20,
+  deadlineMs: 600_000,
   concurrentCalls: 1,
 });
 

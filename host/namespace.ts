@@ -149,10 +149,10 @@ class SnapshotNamespace implements CallNamespace {
   }
 }
 
-export function captureCall(files: ReadonlyMap<string, Uint8Array>, args: readonly string[]): CallSnapshot {
-  if (args.length > MAX_ARGUMENTS) throw new InputError("input-limit");
-  const argv: string[] = [];
-  let bytes = 0;
+export function captureArguments(args: readonly string[], executable?: string): readonly string[] {
+  const argv = executable === undefined ? [] : [executable];
+  if (args.length + argv.length > MAX_ARGUMENTS) throw new InputError("input-limit");
+  let bytes = executable === undefined ? 0 : encoder.encode(executable).length + 1;
   for (const arg of args) {
     if (typeof arg !== "string" || !arg.isWellFormed() || arg.includes("\0")) throw new InputError("invalid-input");
     if (arg.length >= MAX_ARGUMENT_BYTES) throw new InputError("input-limit");
@@ -160,5 +160,9 @@ export function captureCall(files: ReadonlyMap<string, Uint8Array>, args: readon
     if (bytes > MAX_ARGUMENT_BYTES || argv.length >= MAX_ARGUMENTS) throw new InputError("input-limit");
     argv.push(arg);
   }
-  return Object.freeze({ argv: Object.freeze(argv), namespace: Object.freeze(new SnapshotNamespace(files)) });
+  return Object.freeze(argv);
+}
+
+export function captureCall(files: ReadonlyMap<string, Uint8Array>, args: readonly string[]): CallSnapshot {
+  return Object.freeze({ argv: captureArguments(args), namespace: Object.freeze(new SnapshotNamespace(files)) });
 }

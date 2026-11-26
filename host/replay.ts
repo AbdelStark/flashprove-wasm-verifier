@@ -16,8 +16,8 @@ export type Hasher = { update(bytes: Uint8Array): void; digest(): string };
 export type CreateSha256 = () => Hasher;
 type Word = number | bigint;
 type Field = string | Word | Uint8Array;
-type Failure = "abi" | "trap" | "replay-mismatch" | "invalid-input" | "input-limit" | "output-limit"
-  | "memory-limit" | "runtime-oom" | "busy" | "host-io" | "host-internal";
+export type Failure = "abi" | "trap" | "replay-mismatch" | "invalid-input" | "input-limit" | "output-limit"
+  | "memory-limit" | "runtime-oom" | "busy" | "host-io" | "host-internal" | "worker" | "timeout";
 
 export type GuestResult = Readonly<{
   status: number;
@@ -343,7 +343,7 @@ function run(module: WebAssembly.Module, snapshot: CallSnapshot, createSha256: C
   return refusal(call.failure ?? "host-internal");
 }
 
-function refusal(failure: Failure): GuestResult {
+export function refusal(failure: Failure): GuestResult {
   return { status: 5, stdout: failed.slice(), stderr: new Uint8Array(0), failure };
 }
 

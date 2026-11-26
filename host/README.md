@@ -8,6 +8,8 @@ The CLI acquisition adapter admits explicit file operands and the allowed config
 
 The Node runner starts a fresh WebAssembly instance for the parent and each serial child. It checks ordered argument, file and descriptor observations before entering a child branch, then delivers pipe bytes and wait words to the upstream parent. `make replay-test` exercises the transport and compares all published whole calls against the pinned native verifier on x86_64 Linux.
 
+The Node supervisor runs the guest in a fresh worker and owns the 600-second deadline on the calling thread. It checks the versioned reply and waits for clean worker exit before releasing a completed result. A timeout or delivery failure discards any proposed result. After a timeout the admission slot stays held until the worker stops. [Node worker event order](https://nodejs.org/docs/latest-v24.x/api/worker_threads.html#event-message-1)
+
 Two front ends share it:
 
 - `fpv`, a Node command with `cp_verify`'s arguments, output and exit codes (R-API-1)
