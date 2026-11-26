@@ -1,5 +1,7 @@
 # host
 
+The [independent Wasmtime adapter](wasmtime/README.md) implements the restricted I/O contract for M1 fixtures.
+
 The TypeScript host (M2): it loads the module, serves the call's files from memory (R-SYS-1), runs one instance per stage with fork by replay (R-STG-2), enforces size and memory limits (R-MEM-2) and maps every abnormal ending to `NOT CHECKED` (R-EQ-4).
 
 Two front ends share it:

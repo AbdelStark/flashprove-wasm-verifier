@@ -1,0 +1,5 @@
+wasmtime==51.0.0 \
+    --hash=sha256:caa082345cef1a9d70d493a105f620e3c881b9e9a515b153b1d4a5e5bc14e5aa \
+    --hash=sha256:ace48412f269c8f29eb9f160b5259c7895720f986f99a8e84a625bba2d457913 \
+    --hash=sha256:cb4a48bae3de3c0ca99a67e05debbe4bfe48bea7f25ac71ee42fb3fd681ef93c \
+    --hash=sha256:4c1ea115c98b1b0fe6dca5f7feb72691ec570fd153a6f9402920233118cacadb

@@ -34,7 +34,7 @@ Build checks track the transitive compilation inputs, platform dependencies and 
 | `unsigned __int128`, compiler runtime helpers | `blocks/base.h`, `vf_common.h`, `vf_smallness_packing.h` | compiler-rt and field vectors. |
 | `steady_clock` | `now()` in `vf_common.h` | Monotonic time only. Source review verifies that values have no decision use. |
 | WASI arguments, environment and startup randomness | wasi-libc startup and stack protector | Pass the supplied argument vector, an empty environment and no ambient randomness. The typed import inventory and host tests cover these calls. |
-| WASI descriptor and path calls | wasi-libc stdio, file metadata and input reads | Supply read-only virtual files and bounded output. The exact import signatures are in the inventory and the host tests exercise the allowed directions. |
+| WASI descriptor and path calls | wasi-libc stdio, file metadata and input reads | Supply read-only virtual files and bounded output. The [restricted adapter contract](../../host/wasmtime/README.md) and `make wasm-io-test` cover layout, denied capabilities and pointer checks. |
 | WASI process exit | wasi-libc termination | The host captures status and preserves the failure boundary. |
 
 The build checks every resolved dependency and the actual ABI subset against the reviewed [port inventory](../../port/audit.json). [Build evidence](../rfcs/RFC-0001-build-and-source.md#testing-strategy)
