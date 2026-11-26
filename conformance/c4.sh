@@ -14,4 +14,4 @@ g++ "${native_flags[@]}" -DSERVING_BUILD=1 "$define" "$src" -o "$work/tables"
 "$wasm_cxx" "${wasm_flags[@]}" "-I$work/verifier/src" -Wno-unused-function "$define" "$src" \
   "${wasm_link[@]}" -o "$work/tables.wasm"
 
-python3 -B "$ROOT/conformance/c4.py" "$work"
+(cd "$ROOT" && python3 -B -m conformance.c4 "$work" "$@")
