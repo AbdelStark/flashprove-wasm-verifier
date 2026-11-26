@@ -12,6 +12,8 @@ The Wasmtime C1 gate compares the exact part-call closing records and both compl
 
 The M1 CI job runs `make conformance` and retains `build/conformance-m1.json` even when the gate fails. The report contains pins, module digest, gate status, corpus counts and first difference locations. It counts whole calls, part calls and plans separately. Raw streams and numeric dumps stay in their local build directories.
 
+On x86_64 Linux, `make memory-probe` measures both full-size published whole calls at `-j 1`. The bounded Wasmtime measurement adapter compares each call's closing record against native and checks refusal under a smaller request cap. The report separates per-process native RSS, guest linear pages and Wasmtime host mappings. [Memory measurement protocol](../docs/adr/0006-full-size-memory-envelope.md)
+
 - `excluded-fields.txt` lists the approved timing and thread-count anchors and their reasons. `make comparator-test` checks those boundaries without building the verifier.
 - `regressions/` (from M2): every input that once broke R-EQ-1 or R-EQ-2, with its provenance, kept forever
 
