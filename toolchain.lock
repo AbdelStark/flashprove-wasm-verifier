@@ -1,0 +1,22 @@
+# Pinned toolchain. The single source of truth for compiler and runtime versions; read by
+# scripts/bootstrap.sh. Checksums are the SHA-256 digests GitHub publishes for each release asset.
+# Change it only in a pull request that carries an ADR and a full conformance run (see AGENTS.md).
+
+# Compiler and sysroot for wasm32-wasip1: https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-34
+WASI_SDK_VERSION=34.0
+WASI_SDK_SHA256_ARM64_LINUX=f7e243dff54d60bcc576e94d6166b69f410f2500ae4a9ceef34315be10e77971
+WASI_SDK_SHA256_ARM64_MACOS=9c59398106b417f8f14913380fdf0097a8cc0ff4af9eb3ce0065a859e88d49e9
+WASI_SDK_SHA256_X86_64_LINUX=b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4
+WASI_SDK_SHA256_X86_64_MACOS=87d27fa8adc68dee59bfbf2e22a6d34ef717c34d6bf1d8af2a56fc929d9ce0eb
+
+# Runtime for M1 part-calls and the second host: https://github.com/bytecodealliance/wasmtime/releases/tag/v51.0.0
+WASMTIME_VERSION=51.0.0
+WASMTIME_SHA256_AARCH64_LINUX=a263f34aefad1b24ba4d9ca635ddfea415f4acfe3f3f1bb6d4525c34fc6a7397
+WASMTIME_SHA256_AARCH64_MACOS=61dd882b44bcf854b301518781f407b9f6db4c6bd157a55f8f44b1f1357f93dc
+WASMTIME_SHA256_X86_64_LINUX=a18020674fac4107f329bc9ed720ea9c88e4b30a61e8a527787bcce051123d32
+WASMTIME_SHA256_X86_64_MACOS=51767ef35ea3c2653205c09892f174b75e507cf8ffccfcba00ed557832f0e72d
+
+# Host runtime
+NODE_MAJOR=24
+
+# Native reference: built by upstream's verifier/build.sh with g++ 13 or later on x86_64 Linux (CI: ubuntu-24.04).

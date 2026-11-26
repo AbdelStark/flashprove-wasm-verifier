@@ -1,0 +1,3 @@
+# Fields excluded from output comparisons (R-EQ-3).
+# One entry per line: a pattern, then a tab, then the reason. Nothing a client reads under the
+# acceptance rule may be listed here. Empty until M1 measures what differs.

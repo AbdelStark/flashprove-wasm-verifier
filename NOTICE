@@ -1,0 +1,13 @@
+flashprove-wasm-verifier
+Copyright 2026 AbdelStark
+
+This repository builds FlashProve's verifier for WebAssembly. FlashProve is fetched at build time
+and is not stored in this repository:
+
+FlashProve (https://github.com/anthropics/FlashProve)
+Copyright 2026 Anthropic PBC
+Licensed under the Apache License, Version 2.0.
+
+A compiled module contains FlashProve's code. Anyone who distributes the module must also
+distribute FlashProve's NOTICE file and the third-party notices it lists, from the commit in
+upstream.lock.

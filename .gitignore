@@ -1,0 +1,6 @@
+/build/
+/.upstream/
+/.toolchain/
+node_modules/
+*.wasm
+.DS_Store
