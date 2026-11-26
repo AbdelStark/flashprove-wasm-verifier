@@ -22,7 +22,7 @@ Build checks track the transitive compilation inputs, platform dependencies and 
 
 | Dependency | Upstream site | Disposition and check |
 |---|---|---|
-| `fork`, `pipe`, `dup2`, `read`, `close`, `waitpid`, `exit`, `_exit` | `cpStagesRun` in `cp_verify.cpp` | Port ABI and WASI process exit. Assert pid, descriptor and termination behavior. |
+| `fork`, `pipe`, `dup2`, `read`, `close`, `waitpid`, `exit`, `_exit` | `cpStagesRun` in `cp_verify.cpp` | [Port ABI](../../port/ABI.md) and WASI process exit. The Wasmtime transport tests assert pid, descriptor, replay and termination behavior. |
 | `std::thread`, `std::mutex`, atomics | `parFor` and parent reader threads | The `pthread_create`, `pthread_mutex_lock` and `pthread_mutex_unlock` shims select the upstream single-thread fallback. The Wasm build probe exercises both sites. Real shared atomics only on the threaded candidate. |
 | `prctl`, `PR_SET_DUMPABLE` | `main` on Linux | Excluded by the platform guard. Public-only host contract. |
 | `madvise`, `sysconf`, `<sys/mman.h>` | `makePagesResident` in `vf_common.h` | Resolve the header. Keep `MADV_POPULATE_WRITE` undefined. |

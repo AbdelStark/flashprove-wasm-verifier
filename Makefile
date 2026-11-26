@@ -20,7 +20,7 @@ reference: upstream ## build the native cp_verify with upstream's build.sh (x86_
 	@scripts/build-reference.sh
 
 native-c1: reference ## check published native whole calls, part calls and plans
-	@python3 conformance/native-c1.py
+	@python3 -B -m conformance.native_c1
 
 build: bootstrap upstream ## compile the single-threaded WebAssembly module
 	@scripts/build-wasm.sh
@@ -35,9 +35,12 @@ wasm-io-test: build ## test the restricted Wasmtime I/O contract
 	@scripts/bootstrap-wasmtime-python.sh
 	@.toolchain/wasmtime-python/bin/python -B -m unittest conformance.wasmtime_io_test
 
-conformance: build ## run differential conformance, currently corpora C3 and C4
+conformance: build reference ## run C1 part calls and corpora C3 and C4
 	@conformance/c3.sh
 	@conformance/c4.sh
+	@scripts/bootstrap-wasmtime-python.sh
+	@.toolchain/wasmtime-python/bin/python -B -m unittest conformance.wasmtime_stage_test
+	@.toolchain/wasmtime-python/bin/python -B -m conformance.wasmtime_c1
 
 fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 	@scripts/not-yet.sh $@ M2

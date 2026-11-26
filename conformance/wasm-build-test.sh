@@ -40,25 +40,6 @@ grep -Fx 'probe: file offset and parFor checks passed' "$work/probe.stdout"
 [[ $status == 1 && $(tail -n 1 "$work/probe.stdout") == 'NO: fpv-probe-reader' ]]
 echo 'wasm build test: parent reader drained the rejected child'
 
-for threads in 0 1 256 257; do
-  status=0
-  "$wasmtime" run --dir "$fixture::/fixture" "$module" -key /fixture/config \
-    /fixture/ivk/key.bin -q -j "$threads" > "$work/key.stdout" 2> "$work/key.stderr" || status=$?
-  case $threads in
-    0|257)
-      [[ $status == 2 ]]
-      grep -F 'after -j comes a whole number from 1 to 256' "$work/key.stderr" >/dev/null
-      ;;
-    1|256)
-      [[ $status == 5 && $(tail -n 1 "$work/key.stdout") == 'NOT CHECKED: internal-stage' ]]
-      ;;
-  esac
-  printf 'wasm build test: -j %d exit=%d\n' "$threads" "$status"
-done
-
-status=0
-"$wasmtime" run --dir "$fixture::/fixture" "$module" /fixture/config /fixture/ivk \
-  /fixture/example.req /fixture/example.y /fixture/example.proof -id "$(cat "$fixture/ID.txt")" -q \
-  > "$work/whole.stdout" || status=$?
-[[ $status == 5 && $(tail -n 1 "$work/whole.stdout") == 'NOT CHECKED: internal-stage' ]]
-echo 'wasm build test: a published proof reaches the closed stage dispatch'
+"$ROOT/scripts/bootstrap-wasmtime-python.sh"
+cd "$ROOT"
+"$ROOT/.toolchain/wasmtime-python/bin/python" -B -m conformance.wasmtime_c1 --thread-boundaries

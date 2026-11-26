@@ -7,9 +7,10 @@ import unittest
 
 import wasmtime
 
+from host.wasmtime.stages import PartRunner
 from host.wasmtime.wasi import (
     BADF, FD_READ, FD_SEEK, FD_STAT, FD_WRITE, INVAL, NOTCAPABLE, NOTDIR, NOTSUP, PREVIEW1,
-    GuestExit, GuestFault, Wasi,
+    GuestFault, Wasi,
 )
 
 
@@ -137,7 +138,6 @@ class RestrictedIoTest(unittest.TestCase):
         self.assertEqual(host.stdout, b"")
 
     def test_serving_plan_with_two_monotonic_clocks(self):
-        module = wasmtime.Module.from_file(self.engine, ROOT / "build/wasm/cp_verify.wasm")
         config = ROOT / ".upstream/FlashProve/examples/accepted-proof/config"
         files = {f"/config/{name}".encode(): (config / name).read_bytes()
                  for name in ("policy.txt", "KL.bin", "layout.txt")}
@@ -155,14 +155,12 @@ class RestrictedIoTest(unittest.TestCase):
                     times.append(now)
                     return now
 
-                host = Wasi([b"cp_verify", b"-plan", b"accounting", b"/config", b"128"], snapshot, clock=tick)
-                store, inst = self.instantiate(host, module)
-                with self.assertRaises(GuestExit) as exit_:
-                    inst["_start"](store)
-                self.assertEqual(exit_.exception.status, status)
+                runner = PartRunner(ROOT / "build/wasm/cp_verify.wasm", clock=tick)
+                result = runner.run([b"cp_verify", b"-plan", b"accounting", b"/config", b"128"], snapshot)
+                self.assertEqual(result.status, status)
                 self.assertGreater(len(times), 0)
-                self.assertEqual(host.stdout.splitlines()[-1], ending)
-                results.append((bytes(host.stdout), bytes(host.stderr)))
+                self.assertEqual(result.stdout.splitlines()[-1], ending)
+                results.append((result.stdout, result.stderr))
             self.assertEqual(*results)
 
 

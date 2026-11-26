@@ -20,5 +20,4 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: make native-c1
-      - run: make wasm-build-test wasm-audit-test wasm-io-test conformance
+      - run: make native-c1 wasm-build-test wasm-audit-test wasm-io-test conformance
