@@ -12,7 +12,7 @@ Every shim answers one row of the port audit in SPEC.md § 6. A shim without a r
 
 `make build` emits `build/wasm/cp_verify.wasm` and the upstream and port digests. The baseline returns `NOT CHECKED: internal-stage` if a call reaches stage dispatch while process transport is pending. `pipe` and `dup2` return `ENOSYS` in wasi-libc. The port supplies the same result for `fork` and `waitpid`.
 
-The linked module imports WASI Preview 1 only. The SDK currently links `environ_get`, `environ_sizes_get` and `random_get`. The restricted host will supply an empty environment and deny ambient randomness. The full import audit and host are separate milestone gates.
+The linked module imports WASI Preview 1 only. The SDK currently links `environ_get`, `environ_sizes_get` and `random_get`. The restricted host will supply an empty environment and deny ambient randomness.
 
 `make wasm-build-test` uses the log from `make reference` on x86_64 Linux to compare source digests. It checks the accepted and rejected `-j` boundaries and exercises the unmodified worker and reader fallback code in a separate probe.
 
@@ -28,3 +28,11 @@ The serving build uses the upstream macros, C++17, `-O2`, exceptions and the sam
 | `-fcf-protection=full` | Omitted. The native option targets x86. WebAssembly validates indirect call types. |
 | `-fno-ipa-modref` | Omitted. Clang has no GCC IPA modref pass. |
 | `-pthread` | Omitted for the single-threaded target. libc++ uses the local POSIX shims. |
+
+## Audit
+
+[`audit.json`](audit.json) is the reviewed inventory of compiler inputs and the linked module. The build compares it with Clang's transitive dependency files and driver arguments, LLVM's direct references and linked C symbols, and the module's typed imports. Wasmtime validates the final binary with relaxed SIMD and threads disabled. A failing audit leaves the new module unpublished.
+
+The inventory classifies `upstream/` paths as pinned verifier inputs, `sdk/` paths as headers from the pinned compiler or sysroot, and `port/` paths as repository-owned platform code. The [platform audit table](../docs/spec/01-architecture.md#port-audit) records the treatment of source dependencies and WASI calls. A new dependency needs a row and a check before the inventory is updated. `build/wasm/audit-observed.json` contains the observed inventory for review.
+
+`make wasm-audit-test` builds a probe with an unreviewed header and typed import. It also tests compiler flags and a relaxed SIMD instruction. It checks that the page-residency macro stays absent.

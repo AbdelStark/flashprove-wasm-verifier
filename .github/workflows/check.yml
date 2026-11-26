@@ -21,4 +21,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make native-c1
-      - run: make wasm-build-test
+      - run: make wasm-build-test wasm-audit-test
