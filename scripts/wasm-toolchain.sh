@@ -10,8 +10,8 @@ wasm_flags=(-std=c++17 -O2 -fexceptions -fwasm-exceptions -mllvm -wasm-use-legac
   -Wall -Wextra -Wuninitialized -Werror=unused-result -Wno-misleading-indentation
   -DBLK_FIELD=2 -DBLK_COUNT_HASH_CALLS=1 -DSERVING_BUILD=1 -DDIGEST_WORDS=8
   "-ffile-prefix-map=$ROOT=." "-I$ROOT/port/include"
-  "-I$upstream/blocks" "-I$upstream/prover" -Wl,-z,stack-size=1048576)
-wasm_link=(-lunwind)
+  "-I$upstream/blocks" "-I$upstream/prover")
+wasm_link=(-Wl,-z,stack-size=1048576 -lunwind)
 
 prepare_wasm_source() {
   mkdir -p "$1/verifier"
