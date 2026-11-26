@@ -93,12 +93,12 @@ function fileType(kind: Descriptor["kind"]): number {
   return kind === "directory" ? 3 : kind === "file" ? 4 : 2;
 }
 
-function filestat(memory: Memory, pointer: number, type: number, size: number): number {
+function filestat(memory: Memory, pointer: number, type: number, size: bigint): number {
   memory.view(pointer, 64).fill(0);
   const out = memory.data(pointer, 64);
   out.setUint8(16, type);
   out.setBigUint64(24, 1n, true);
-  out.setBigUint64(32, BigInt(size), true);
+  out.setBigUint64(32, size, true);
   return Errno.success;
 }
 
@@ -204,13 +204,13 @@ export class WasiPreview1 {
     path_filestat_get: (fd: number, flags: number, pointer: number, length: number, output: number) => {
       const resolved = this.#resolve(fd, flags, pointer, length, PATH_STAT);
       if (resolved.kind === "error") return resolved.errno;
-      return filestat(this.#memory, output, fileType(resolved.kind), resolved.kind === "file" ? resolved.size : 0);
+      return filestat(this.#memory, output, fileType(resolved.kind), resolved.kind === "file" ? resolved.size : 0n);
     },
     fd_filestat_get: (fd: number, pointer: number) => {
       const entry = this.#fds.get(fd);
       if (!entry) return Errno.badf;
       if (!(entry.rights & FD_STAT)) return Errno.notcapable;
-      return filestat(this.#memory, pointer, fileType(entry.kind), entry.kind === "file" ? entry.file.size : 0);
+      return filestat(this.#memory, pointer, fileType(entry.kind), entry.kind === "file" ? entry.file.size : 0n);
     },
     fd_fdstat_get: (fd: number, pointer: number) => {
       const entry = this.#fds.get(fd);
@@ -235,7 +235,7 @@ export class WasiPreview1 {
       if (entry.kind !== "file") return Errno.spipe;
       if (!(entry.rights & FD_SEEK)) return Errno.notcapable;
       if (whence !== 0 && whence !== 1 && whence !== 2) return Errno.inval;
-      const base = whence === 0 ? 0n : whence === 1 ? entry.position : BigInt(entry.file.size);
+      const base = whence === 0 ? 0n : whence === 1 ? entry.position : entry.file.size;
       const position = base + offset;
       if (position < 0n || position > I64_MAX) return Errno.inval;
       this.#memory.data(pointer, 8).setBigUint64(0, position, true);
@@ -296,6 +296,10 @@ export class WasiPreview1 {
     if (!path) return { kind: "error", errno: Errno.noent };
     if (path.includes("\0")) return { kind: "error", errno: Errno.inval };
     if (path.startsWith("/")) return { kind: "error", errno: Errno.notcapable };
+    if (fd === 3 && this.snapshot.namespace.lookupOperand) {
+      const entry = this.snapshot.namespace.lookupOperand(path, right === PATH_OPEN);
+      return entry.kind === "directory" ? { kind: "directory", path: "/" } : entry;
+    }
 
     const root = directory.path === "/" ? [] : directory.path.slice(1).split("/");
     const parts = root.slice();

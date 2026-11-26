@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: make test
+      - run: make scoped-disk-test
   native-c1:
     runs-on: ubuntu-24.04
     steps:
