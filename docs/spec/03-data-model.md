@@ -47,8 +47,8 @@ type VerifyResult = Readonly<{
 DiagnosticsV1 = {schema: 1, phase, code, stage?, elapsedNs?, peakLinearBytes?}
 ConformanceReportV1 = {schema: 1, upstreamCommit, toolchainSha256, moduleSha256,
   runtime, cases: CaseResultV1[], counts, safetyViolations, equalityDifferences}
-CaseResultV1 = {caseId, corpus, mode, nativeExit, guestExit, nativeVerdict,
-  guestVerdict, firstDifference?, hostFailure?, seed?}
+CaseResultV1 = {schema: 1, caseId, corpus, mode, nativeExit, guestExit, nativeVerdict,
+  guestVerdict, equal, safetyViolation, firstDifference?, hostFailure?, seed?}
 RegressionV1 = {schema: 1, caseId, upstreamCommit, fixtureId, args, generatorVersion,
   operations, seed?, rule, stage, firstDifference, provenance}
 ReleaseManifestV1 = {schema: 1, version, sourceCommit, upstreamCommit, abi: 1,
