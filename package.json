@@ -1,0 +1,15 @@
+{
+  "name": "flashprove-wasm-verifier",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build:host": "tsc --project tsconfig.json",
+    "test": "npm run build:host && node --test host/test/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
