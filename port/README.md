@@ -4,15 +4,15 @@ Everything that makes upstream's `cp_verify` sources build and run as WebAssembl
 
 - `include/`: platform headers placed ahead of the SDK headers.
 - `baseline.cpp`: single-threaded POSIX shims. libc++ turns `pthread_create`'s `ENOSYS` into `std::system_error`. Mutex lock and unlock return success without changing state.
-- `ABI.md` (M2): the `fpv_port` import module, versioned (R-API-4).
+- `process.cpp`: adapts the [stage imports](ABI.md) to the upstream POSIX process calls.
 
 Every shim answers one row of the port audit in SPEC.md § 6. A shim without a row, or a row without a shim, fails the audit test.
 
 ## Serving build
 
-`make build` emits `build/wasm/cp_verify.wasm` and the upstream and port digests. The baseline returns `NOT CHECKED: internal-stage` if a call reaches stage dispatch while process transport is pending. `pipe` and `dup2` return `ENOSYS` in wasi-libc. The port supplies the same result for `fork` and `waitpid`.
+`make build` emits `build/wasm/cp_verify.wasm` and the upstream and port digests. The independent Wasmtime host connects the stage imports for key and leaf part calls.
 
-The linked module imports WASI Preview 1 only. The [restricted Wasmtime adapter](../host/wasmtime/README.md) supplies an empty environment and denies ambient randomness.
+The linked module imports the audited WASI Preview 1 calls and `fpv_port` stage operations. The [restricted Wasmtime adapter](../host/wasmtime/README.md) supplies an empty environment and denies ambient randomness.
 
 `make wasm-build-test` uses the log from `make reference` on x86_64 Linux to compare source digests. It checks the accepted and rejected `-j` boundaries and exercises the unmodified worker and reader fallback code in a separate probe.
 

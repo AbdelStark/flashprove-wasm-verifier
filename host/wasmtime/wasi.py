@@ -108,6 +108,7 @@ class Wasi:
         self.directories = frozenset(self.directories)
         self.clock = clock
         self.output_limit = output_limit
+        self.written = 0
         self.stdout = bytearray()
         self.stderr = bytearray()
         self.fds = {
@@ -137,8 +138,7 @@ class Wasi:
                 linker.define_func(PREVIEW1, entry.name, entry.type,
                                    self.memory_callback(callback), access_caller=True)
 
-    @staticmethod
-    def memory_callback(callback):
+    def memory_callback(self, callback):
         def call(caller, *args):
             return callback(GuestMemory(caller), *args)
         return call
@@ -364,9 +364,10 @@ class Wasi:
         start, _ = memory.span(pointer, 4)
         spans = memory.iovecs(vectors, count)
         size = sum(length for _, length in spans)
-        if size > self.output_limit - len(self.stdout) - len(self.stderr):
+        if size > self.output_limit - self.written:
             raise GuestFault("guest output limit")
         for span in spans:
             entry.data.extend(memory.read(span))
+        self.written += size
         memory.write(start, U32.pack(size))
         return 0

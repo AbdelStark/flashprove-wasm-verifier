@@ -146,7 +146,7 @@ def main():
     observed = {"link_flags": link}
     dependencies = set()
     direct = set()
-    for unit in ("cp_verify", "baseline"):
+    for unit in ("cp_verify", "baseline", "process"):
         dependencies.update(dependency_paths(work / f"{unit}.d", work / "verifier/src", work))
         observed[f"{unit}_flags"] = driver_flags(work / f"{unit}.command.json", work, digest)
         direct.update(c_symbols(work / f"{unit}.o", "undefined"))

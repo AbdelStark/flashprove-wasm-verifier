@@ -15,3 +15,7 @@ The adapter binds WASI Preview 1 functions with the exact signatures in the [por
 | Exit | Capture the verifier's status. Invalid guest ranges and exhausted output raise a host fault. |
 
 The tests use actual Wasm calls for bounds, overflow, denied capabilities, and descriptor lifetimes. They also run the serving module with two clock schedules and compare both streams and status for a plan and a table-digest refusal.
+
+## Part calls
+
+`make conformance` compares the key and leaf parts from each published fixture with the pinned native executable. The host admits one synchronous call per process. It restores the observed prefix in a fresh store and releases the child store after termination. It passes child stdout and the encoded wait status to upstream's parent. A trap or replay mismatch returns exit 5 with `NOT CHECKED: internal-stage` and discards captured output. The [stage ABI](../../port/ABI.md) lists the supported imports.

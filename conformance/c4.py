@@ -123,7 +123,7 @@ def check_digest_refusal(work):
             raise ValueError("digest refusal test could not replace one SiLU digest word")
         policy.write_bytes(changed)
         for command in ([work / "tables", config],
-                        [WASMTIME, "run", "--dir", f"{config}::/config", ROOT / "build/wasm/cp_verify.wasm",
+                        [WASMTIME, "run", "-W", "unknown-imports-trap=y", "--dir", f"{config}::/config", ROOT / "build/wasm/cp_verify.wasm",
                          "-plan", "accounting", "/config", "128"]):
             proc = subprocess.run(command, capture_output=True, check=False)
             if proc.returncode != 1 or proc.stdout.splitlines()[-1:] != [b"NO: table-digest-silu"]:

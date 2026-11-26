@@ -16,14 +16,3 @@ extern "C" void (*signal(int number, void (*handler)(int)))(int) {
   if (number != SIGCHLD || handler != SIG_DFL) __builtin_trap();
   return SIG_DFL;
 }
-
-// wasi-libc's pipe and dup2 already return ENOSYS. Stage transport will replace these stubs.
-extern "C" pid_t fork(void) {
-  errno = ENOSYS;
-  return -1;
-}
-
-extern "C" pid_t waitpid(pid_t, int *, int) {
-  errno = ENOSYS;
-  return -1;
-}
