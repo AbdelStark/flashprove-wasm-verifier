@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance fuzz test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -46,6 +46,9 @@ m1-prerequisites: reference wasm-build-test wasm-audit-test wasm-io-test compara
 
 conformance: ## require the port audit, C3, C4 and Wasmtime C1 part calls and plans
 	+@python3 -B -m conformance.m1 "$(MAKE)"
+
+memory-probe: conformance ## measure full-size native RSS and Wasmtime stage pages
+	@.toolchain/wasmtime-python/bin/python -B -m conformance.memory
 
 fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
 	@scripts/not-yet.sh $@ M2

@@ -68,6 +68,46 @@ def read_pipe(size):
         i32.const 32 i32.load i32.const {size} i32.eq call $assert'''
 
 
+def whole_program():
+    # Store each pipe's descriptors and pid separately, then consume them in reverse order.
+    forks = []
+    waits = []
+    for ordinal in range(3):
+        slot, tag = ordinal * 12, 65 + ordinal
+        close_earlier = "\n".join(f"i32.const {i * 12} i32.load call $close drop" for i in range(ordinal))
+        forks.append(f"""
+            i32.const {slot} call $pipe i32.eqz call $assert
+            call $fork local.tee $pid i32.eqz
+            if
+                {close_earlier}
+                i32.const {slot} i32.load call $close drop
+                i32.const {slot + 4} i32.load i32.const 1 call $dup2 i32.const 1 i32.eq call $assert
+                i32.const {slot + 4} i32.load call $close drop
+                i32.const 112 i32.const {tag} i32.store8
+                i32.const 1 i32.const 100 i32.const 1 i32.const 116 call $write i32.eqz call $assert
+                i32.const {tag} call $exit
+                unreachable
+            end
+            i32.const {slot + 8} local.get $pid i32.store
+            i32.const {slot + 4} i32.load call $close drop""")
+        waits.append(f"""
+            i32.const {slot} i32.load i32.const 100 i32.const 1 i32.const 116 call $read i32.eqz call $assert
+            i32.const 116 i32.load i32.const 1 i32.eq call $assert
+            i32.const 112 i32.load8_u i32.const {tag} i32.eq call $assert
+            i32.const {slot} i32.load call $close drop
+            i32.const {slot + 8} i32.load i32.const 116 i32.const 0 call $wait i32.const {ordinal + 1} i32.eq call $assert
+            i32.const 116 i32.load i32.const {tag << 8} i32.eq call $assert""")
+    imports = program("", "", 0).partition('(memory (export "memory")')[0]
+    return imports + f"""(memory (export "memory") 1)
+        (func $assert (param i32) local.get 0 i32.eqz if unreachable end)
+        (func (export "_start") (local $pid i32)
+            i32.const 100 i32.const 112 i32.store
+            i32.const 104 i32.const 1 i32.store
+            {''.join(forks)}
+            {''.join(reversed(waits))}
+            i32.const 0 call $exit))"""
+
+
 class ChangedObservationRunner(PartRunner):
     def change(self, host):
         host.journal.add(b"changed pre-fork observation", 1)
@@ -109,7 +149,11 @@ class StageTransportTest(unittest.TestCase):
         # The synthetic parent reports success only after seeing signal 6 and EOF.
         self.assertEqual(runner.start(host), 3)
         self.assertTrue(host.fault)
-        self.assertIsNone(host.wait_word)
+        self.assertEqual(host.wait_words, {})
+        self.assertEqual(runner.run(PART_ARGS, {}), Result(5, FAILED, b""))
+
+    def test_child_resource_failure_overrides_parent_success(self):
+        runner = self.runner(program("i32.const 5 call $exit", read_pipe(3), 5 << 8))
         self.assertEqual(runner.run(PART_ARGS, {}), Result(5, FAILED, b""))
 
     def test_changed_observation_refuses_before_child_branch(self):
@@ -121,6 +165,15 @@ class StageTransportTest(unittest.TestCase):
         runner = self.runner(program("unreachable", read_pipe(0), 6), ChangedFileRunner)
         self.assertEqual(runner.run(PART_ARGS, {b"/file": b"original"}), Result(5, FAILED, b""))
         self.assertEqual(runner.replay_error, "fork replay mismatch")
+
+    def test_three_ordinals_keep_distinct_pipes_and_start_once(self):
+        runner = self.runner(whole_program())
+        starts = []
+        runner.observe = lambda record, event, pages: starts.append(
+            None if record is None else record.ordinal) if event == "start" else None
+        result = runner._run((b"cp_verify", b"/config"), {}, stages=3)
+        self.assertEqual(result, Result(0, b"", b""))
+        self.assertEqual(starts, [None, 0, 1, 2])
 
 
 if __name__ == "__main__":

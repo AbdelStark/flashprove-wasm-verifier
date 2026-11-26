@@ -1,4 +1,4 @@
-"""Single-fork replay for the independent Wasmtime part-call adapter."""
+"""Bounded ordinal replay for the independent Wasmtime adapter."""
 
 from dataclasses import dataclass
 from hashlib import sha256
@@ -17,7 +17,7 @@ from .wasi import (
 PORT = "fpv_port"
 FAILED = b"NOT CHECKED: internal-stage\n"
 PIPE_TYPE = 0  # Preview 1 has no dedicated pipe file type.
-PID = 1
+MAX_PAGES = (1 << 16) - 1
 _active = Lock()  # Wasmtime's Python callbacks share exception state within the process.
 
 
@@ -68,18 +68,21 @@ class Result:
 
 
 class ProcessHost(Wasi):
-    def __init__(self, runner, argv, files, *, expected=None, replay_clock=(), output_limit=8 << 20):
+    def __init__(self, runner, argv, files, *, expected=None, replay_clock=(), output_limit=8 << 20, stages=1):
         super().__init__(argv, files, clock=self.tick, output_limit=output_limit)
         self.runner = runner
         self.expected = expected
         self.replay_clock = replay_clock
         self.times = []
+        self.stages = stages
+        self.forks = 0
         self.recording = True
         self.journal = Journal()
-        self.pipe_fds = None
+        self.pending = None
+        self.redirect_fd = None
         self.pipe_data = bytearray()
         self.redirected = False
-        self.wait_word = None
+        self.wait_words = {}
         self.fault = False
 
     def tick(self):
@@ -128,78 +131,92 @@ class ProcessHost(Wasi):
         return 1
 
     def pipe(self, memory, pointer):
-        if self.pipe_fds is not None:
-            raise GuestFault("only one stage pipe is supported")
+        if self.fault or not self.recording or self.pending is not None:
+            raise GuestFault("unexpected stage pipe")
         destination, _ = memory.span(pointer, 8)
         free = (fd for fd in range(4, MAX_FDS) if fd not in self.fds)
         read_fd, write_fd = next(free, None), next(free, None)
         if write_fd is None:
             raise GuestFault("guest descriptor limit")
-        self.fds[read_fd] = Descriptor(PIPE_TYPE, FD_READ, data=self.pipe_data)
-        self.fds[write_fd] = Descriptor(PIPE_TYPE, FD_WRITE, data=self.pipe_data)
-        self.pipe_fds = read_fd, write_fd
+        data = bytearray()
+        self.fds[read_fd] = Descriptor(PIPE_TYPE, FD_READ, data=data)
+        self.fds[write_fd] = Descriptor(PIPE_TYPE, FD_WRITE, data=data)
+        self.pending = read_fd, write_fd
         memory.write(destination, struct.pack("<II", read_fd, write_fd))
         return 0
 
-    def fork_record(self):
+    def fork_record(self, ordinal):
         argv, files = Journal(), Journal()
         argv.add(b"argv", *self.argv)
         for path, data in sorted(self.files.items()):
             files.add(b"file", b"/" + b"/".join(path), data)
-        return ForkRecord(0, argv.digest(), files.digest(), self.journal.digest())
+        return ForkRecord(ordinal, argv.digest(), files.digest(), self.journal.digest())
 
     def fork(self, memory):
-        if not self.recording or self.pipe_fds is None or any(fd not in self.fds for fd in self.pipe_fds):
+        if not self.recording or self.pending is None or any(fd not in self.fds for fd in self.pending):
             raise GuestFault("invalid fork sequence")
-        record = self.fork_record()
-        self.recording = False
+        read_fd, write_fd = self.pending
+        self.pending = None
+        ordinal = self.forks
+        self.forks += 1
+        pid = self.forks
+        if self.expected is not None and ordinal < self.expected.ordinal:
+            return pid
+        record = self.fork_record(ordinal)
         if self.expected is not None:
             if record != self.expected or len(self.times) != len(self.replay_clock):
                 raise GuestFault("fork replay mismatch")
+            self.recording = False
+            self.redirect_fd = write_fd
+            self.pipe_data = self.fds[write_fd].data
             self.stdout.clear()
             self.stderr.clear()
             self.written = 0
             return 0
 
+        self.recording = self.forks < self.stages
         try:
             child = ProcessHost(self.runner, self.argv,
                                 {b"/" + b"/".join(path): data for path, data in self.files.items()},
                                 expected=record, replay_clock=tuple(self.times),
-                                output_limit=self.output_limit - self.written)
+                                output_limit=self.output_limit - self.written, stages=self.stages)
             status = self.runner.start(child)
             if child.recording or not child.redirected:
                 raise GuestFault("child ended before replay or redirect")
             # Child stores are closed by start(). Only pipe bytes, stderr and status survive.
-            self.pipe_data = child.pipe_data
-            for fd in self.pipe_fds:
-                self.fds[fd].data = self.pipe_data
+            for fd in (read_fd, write_fd):
+                self.fds[fd].data = child.pipe_data
             self.stderr.extend(child.stderr)
-            self.written += len(self.pipe_data) + len(child.stderr)
-            self.wait_word = status << 8
+            self.written += len(child.pipe_data) + len(child.stderr)
+            self.wait_words[pid] = status << 8
+            # The pinned child's top-level allocation and thread exceptions exit 5.
+            self.fault |= status == 5
         except Exception:
-            self.wait_word = 6
+            self.wait_words[pid] = 6
             self.fault = True
-        return PID
+        return pid
 
     def dup2(self, memory, old_fd, new_fd):
-        if (self.expected is None or self.recording or self.redirected or self.pipe_fds is None
-                or old_fd != self.pipe_fds[1] or new_fd != 1 or old_fd not in self.fds):
+        if (self.expected is None or self.recording or self.redirected
+                or old_fd != self.redirect_fd or new_fd != 1 or old_fd not in self.fds):
             raise GuestFault("invalid child stdout redirect")
         self.fds[new_fd] = self.fds[old_fd]
         self.redirected = True
         return new_fd
 
     def waitpid(self, memory, pid, pointer, flags):
-        if self.expected is not None or pid != PID or flags != 0 or self.wait_word is None:
+        if self.expected is not None or flags != 0 or pid not in self.wait_words:
             raise GuestFault("invalid waitpid sequence")
         destination, _ = memory.span(pointer, 4)
-        memory.write(destination, U32.pack(self.wait_word))
-        self.wait_word = None
+        memory.write(destination, U32.pack(self.wait_words.pop(pid)))
         return pid
 
 
 class PartRunner:
-    def __init__(self, module_path, *, clock=monotonic_ns):
+    def __init__(self, module_path, *, clock=monotonic_ns, max_pages=MAX_PAGES, parent_pages=None, observe=None):
+        self.parent_pages = max_pages if parent_pages is None else parent_pages
+        if not all(1 <= pages <= MAX_PAGES for pages in (max_pages, self.parent_pages)):
+            raise ValueError("invalid Wasmtime page limit")
         config = wasmtime.Config()
         config.wasm_exceptions = True
         config.wasm_threads = False
@@ -207,25 +224,41 @@ class PartRunner:
         self.engine = wasmtime.Engine(config)
         self.module = wasmtime.Module.from_file(self.engine, module_path)
         self.clock = clock
+        self.max_pages = max_pages
+        self.observe = observe
 
     def start(self, host):
         with wasmtime.Store(self.engine) as store, wasmtime.Linker(self.engine) as linker:
-            store.set_limits(memory_size=(1 << 32) - (1 << 16), instances=1, memories=1)
+            pages = self.parent_pages if host.expected is None else self.max_pages
+            store.set_limits(memory_size=pages << 16, instances=1, memories=1)
             host.link(linker, self.module)
+            if self.observe is not None:
+                self.observe(host.expected, "before", 0)
             instance = linker.instantiate(store, self.module)
+            exports = instance.exports(store)
+            if self.observe is not None:
+                self.observe(host.expected, "start", exports["memory"].size(store))
             try:
-                instance.exports(store)["_start"](store)
+                exports["_start"](store)
             except GuestExit as exit_:
                 return exit_.status
+            finally:
+                if self.observe is not None:
+                    self.observe(host.expected, "end", exports["memory"].size(store))
             return 0
 
     def run(self, argv, files):
-        if len(argv) < 2 or argv[1] not in (b"-key", b"-leaf", b"-plan") or not _active.acquire(blocking=False):
+        if len(argv) < 2 or argv[1] not in (b"-key", b"-leaf", b"-plan"):
+            return Result(5, FAILED, b"")
+        return self._run(argv, files, stages=1)
+
+    def _run(self, argv, files, *, stages):
+        if not _active.acquire(blocking=False):
             return Result(5, FAILED, b"")
         try:
-            host = ProcessHost(self, argv, files)
+            host = ProcessHost(self, argv, files, stages=stages)
             status = self.start(host)
-            if host.fault or (status == 3 and (host.recording or host.wait_word is not None)):
+            if host.fault or (status in (0, 3, 14) and (host.forks != stages or host.wait_words or host.pending)):
                 return Result(5, FAILED, b"")
             return Result(status, bytes(host.stdout), bytes(host.stderr))
         except Exception:

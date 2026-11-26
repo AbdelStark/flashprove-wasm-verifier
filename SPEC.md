@@ -138,7 +138,7 @@ The [implementation tracker](docs/roadmap/IMPLEMENTATION.md) links the work and 
 
 ## 9. Open questions
 
-- [Floating-point parity](docs/rfcs/RFC-0002-numerical-parity.md#open-questions) and [per-stage memory](docs/rfcs/RFC-0005-failure-boundary.md#open-questions) are M1 measurement decisions.
+- [Floating-point parity](docs/rfcs/RFC-0002-numerical-parity.md#open-questions) is an M1 measurement decision. The [full-size memory ADR](docs/adr/0006-full-size-memory-envelope.md) records the per-stage envelope.
 - [Threaded candidate feasibility](docs/rfcs/RFC-0009-performance.md#open-questions) is an M4 measurement decision.
 
 ## 10. Changing this spec
