@@ -11,6 +11,8 @@ fpv -plan {accounting|request|arrays|id} ...
 
 `fpv` receives the native argument vector excluding argv[0]. It passes the same ordered arguments to upstream with literal `cp_verify` as the guest argv[0]. Native parsing decides suffix options, including `-policy`, `-j`, `-q`, `-show-stages`, `-next-token`, `-no-proof-of-work` and `-bits`. The CLI carries stdout and stderr as bytes, sets the process exit code after writes settle and leaves host provenance diagnostics out of those streams. [Native call forms](https://github.com/anthropics/FlashProve/blob/9e2bdd8ff5bf9c62f18263d7dac189b0400b260c/verifier/README.md#the-call)
 
+Run `make cli` and invoke `./bin/fpv` from the source checkout. The command checks the local module against the checksum emitted by the audited build. Exit 5 with `NOT CHECKED: internal-stage` covers an unreadable or mismatched module. A write failure on either stream returns exit 15. [Node stream write semantics](https://nodejs.org/download/release/v24.22.2/docs/api/stream.html#writablewritechunk-encoding-callback)
+
 ## Library
 
 ```ts

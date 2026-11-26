@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+import { argv, stderr, stdout } from "node:process";
+import { runCli } from "../build/ts/host/node-cli.js";
+
+process.exitCode = await runCli(argv.slice(2), stdout, stderr);
