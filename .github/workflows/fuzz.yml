@@ -1,0 +1,28 @@
+name: C5 seed evidence
+on:
+  pull_request:
+    paths:
+      - conformance/fuzz*.py
+      - .github/workflows/fuzz.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  seeded-conformance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      FUZZ_JOBS: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: make check fuzz-test
+      - run: make fuzz SEEDS=1000
+      - name: Retain successful C5 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-c5
+          path: build/fuzz/seeds-1000-0-of-1.json
+          if-no-files-found: error

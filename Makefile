@@ -1,8 +1,10 @@
 # flashprove-wasm-verifier. `make help` lists every target. Targets of later milestones exit 2.
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
+FUZZ_JOBS ?= 1
+FUZZ_SHARD ?= 0/1
 
-.PHONY: help bootstrap upstream check reference native-c1 build cli host-build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli host-build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -62,8 +64,11 @@ conformance: ## require M1 gates and compare Node C1, C2 and C6 with pinned nati
 memory-probe: m1-conformance ## measure full-size native RSS and Wasmtime stage pages
 	@.toolchain/wasmtime-python/bin/python -B -m conformance.memory
 
-fuzz: ## corpus C5: SEEDS seeded mutations, wasm vs native  [M2]
-	@scripts/not-yet.sh $@ M2
+fuzz: ## run C5 against pinned native with SEEDS, FUZZ_JOBS and FUZZ_SHARD
+	+@python3 -B -m conformance.fuzz run --make "$(MAKE)" --seeds "$(SEEDS)" --jobs "$(FUZZ_JOBS)" --shard "$(FUZZ_SHARD)"
+
+fuzz-test: ## check deterministic seed mapping, shard merge and mismatch replay
+	@python3 -B -m unittest conformance.fuzz_test
 
 test: ## type-check the TypeScript host and run its contract tests
 	@npm ci --ignore-scripts --no-audit --no-fund

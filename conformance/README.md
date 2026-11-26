@@ -14,6 +14,12 @@ The Wasmtime C1 gate compares the exact part-call closing records and both compl
 
 C2 uses the pinned upstream generator for all three altered-proof tables. It copies the two small fixtures into per-case scratch directories and checks the exact exit and rejection line. A complete run has 10 default-policy rows, 10 clipped-gap rows and 79 item rows. Each C2 case records its fixture, table and table hash, physical row number, target and known rejection names. Missing rows and a native result that disagrees with the pinned table both fail the gate.
 
+C5 runs with `make fuzz SEEDS=1000` on x86_64 Linux and requires fresh C3 and C4 evidence. Set `FUZZ_JOBS` to run independent pairs concurrently. Generator version 1 initializes SplitMix64 with the unsigned seed index, then consumes words for input class, fixture, target and operation in that order. Each choice is unsigned modulo the number of alternatives. A flip picks a byte and a bit, truncation picks a shorter length, and append uses the original length and one random byte. The classes and order are defined in `fuzz_cases.py`. Both runners receive the same mutated copy and argument vector.
+
+Reports are written to `build/fuzz/seeds-N-INDEX-of-COUNT.json`. The default shard is `0/1`. Set `FUZZ_SHARD=I/K` to run the seed indices congruent to `I` modulo `K`. Merge reports with `python3 -B -m conformance.fuzz merge --seeds N --output build/conformance-c5.json REPORT ...`. A merge checks the pins, runtime, fixture manifests and full seed coverage.
+
+Confirmed mismatches keep the original and reduced operation lists under `build/fuzz/private/`. Replay a descriptor with `python3 -B -m conformance.fuzz replay DESCRIPTOR`. Replay returns 1 when a mismatch remains. Keep failing evidence local and follow the private disclosure process for safety issues. [Security reporting](../SECURITY.md)
+
 CI retains `build/conformance-m1.json` and `build/conformance-node.json` even when a gate fails. Reports include pins, runtime, module digest, mode and verdict counts, first difference locations and gate status. Raw streams and numeric dumps stay in their local build directories.
 
 On x86_64 Linux, `make memory-probe` measures both full-size published whole calls at `-j 1`. The bounded Wasmtime measurement adapter compares each call's closing record against native and checks refusal under a smaller request cap. The report separates per-process native RSS, guest linear pages and Wasmtime host mappings. [Memory measurement protocol](../docs/adr/0006-full-size-memory-envelope.md)

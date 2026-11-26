@@ -52,7 +52,7 @@ CaseResultV1 = {schema: 1, caseId, corpus, mode, nativeExit, guestExit, nativeVe
   guestVerdict, equal, safetyViolation, firstDifference?, hostFailure?, seed?,
   expectedRejection?, nativeRejection?, guestRejection?, oracleMatches?, provenance?}
 RegressionV1 = {schema: 1, caseId, upstreamCommit, fixtureId, args, generatorVersion,
-  operations, seed?, rule, stage, firstDifference, provenance}
+  operations, originalOperations?, seed?, rule, stage, firstDifference, provenance, signature?}
 ReleaseManifestV1 = {schema: 1, version, sourceCommit, upstreamCommit, abi: 1,
   upstreamLockSha256, toolchainLockSha256, artifacts: [{path, bytes, sha256}]}
 ```
@@ -62,3 +62,5 @@ Artifacts use UTF-8 JSON, decimal strings for counters above the safe integer ra
 A failed conformance report can omit provenance that was unavailable at the failing gate. Gate states are `passed`, `failed` or `not-run`. A gate can include the exit status, a bounded failure reason and the first difference location.
 
 C2 case provenance gives the fixture ID, source table name and SHA-256, physical line and mutation target. It also records the expected rejection, whether native matched it, and each runner's rejection name when that name appears in the pinned registry.
+
+C5 reports record the generator version, requested and executed seed counts, shard index and count, fixture manifest hashes and each completed seed's class, fixture and mutation kind. Replayable operations and the exact comparison signature stay in the local mismatch descriptor.

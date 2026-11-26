@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Repository checks
-        run: make check comparator-test m1-gate-test node-gate-test
+        run: make check comparator-test m1-gate-test node-gate-test fuzz-test
       - name: Fetch and verify the upstream pin
         run: make upstream
       - name: Fetch and verify the toolchain pin
