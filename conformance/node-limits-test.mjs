@@ -45,6 +45,31 @@ test("a child memory limit latches through a native parent refusal", () => {
   expectFailure(runNodeGuest(probe, capture("child", "-key"), { childPages: pages }), "memory-limit");
 });
 
+test("the guest ABI rejects invalid pipe and wait out pointers", () => {
+  for (const mode of ["bad-pipe-pointer", "bad-wait-pointer"]) {
+    expectFailure(runNodeGuest(probe, capture(mode, "-key")), "abi");
+  }
+});
+
+test("an unsupported ABI version traps before the pipe import", () => {
+  const original = WebAssembly.Instance;
+  let calls = 0;
+  WebAssembly.Instance = class extends original {
+    constructor(module, imports) {
+      imports.fpv_port.abi_version = () => 2;
+      const pipe = imports.fpv_port.pipe;
+      imports.fpv_port.pipe = pointer => { calls++; return pipe(pointer); };
+      super(module, imports);
+    }
+  };
+  try {
+    expectFailure(runNodeGuest(probe, capture("child", "-key")), "trap");
+    assert.equal(calls, 0);
+  } finally {
+    WebAssembly.Instance = original;
+  }
+});
+
 test("one output budget covers the parent, unread child pipes and stderr", () => {
   const byte = ownedFile(Uint8Array.of(65));
   const snapshot = () => ({ argv: ["cp_verify", "config"], namespace: { lookup: () => byte } });
