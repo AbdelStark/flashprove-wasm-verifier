@@ -9,8 +9,9 @@ paths = [root / name for name in (
     "scripts/wasm-toolchain.sh", "scripts/port-digest.py", "scripts/lib.sh",
     "scripts/audit_wasm.py",
     "scripts/bootstrap-wasmtime-python.sh", "host/wasmtime/requirements.txt", "host/wasmtime/wasi.py",
-    "host/wasmtime/stages.py",
+    "host/wasmtime/stages.py", "package.json", "package-lock.json", "tsconfig.json",
 )]
+paths.extend((root / "host").glob("*.ts"))
 for directory in ("port", "patches"):
     paths.extend(path for path in (root / directory).rglob("*") if path.is_file())
 

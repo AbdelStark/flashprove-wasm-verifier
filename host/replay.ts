@@ -1,6 +1,8 @@
 /** Fresh instances and deterministic replay of the verifier's process calls. */
 
 import type { CallSnapshot, InputFile, Lookup } from "./namespace.js";
+import { elapsedNs } from "./diagnostics.js";
+import type { DiagnosticStage, Failure, InstanceDiagnostic } from "./diagnostics.js";
 import { BASELINE_LIMITS, lowerLimits, PAGE_BYTES } from "./limits.js";
 import type { RunLimits } from "./limits.js";
 import { GuestExit, OutputBudget, PREVIEW1, WasiFault, WasiPreview1 } from "./wasi.js";
@@ -8,6 +10,7 @@ import type { StagePipe } from "./wasi.js";
 
 const PORT = "fpv_port";
 const MAX_EVENTS = 65536;
+const wholeStages = ["key", "leaf", "request"] as const;
 const encoder = new TextEncoder();
 const failed = encoder.encode("NOT CHECKED: internal-stage\n");
 let activeCalls = 0;
@@ -16,8 +19,7 @@ export type Hasher = { update(bytes: Uint8Array): void; digest(): string };
 export type CreateSha256 = () => Hasher;
 type Word = number | bigint;
 type Field = string | Word | Uint8Array;
-export type Failure = "abi" | "trap" | "replay-mismatch" | "invalid-input" | "input-limit" | "output-limit"
-  | "memory-limit" | "runtime-oom" | "busy" | "host-io" | "host-internal" | "worker" | "timeout";
+export type { Failure } from "./diagnostics.js";
 
 export type GuestResult = Readonly<{
   status: number;
@@ -129,7 +131,10 @@ class InstanceRun {
   readonly #times: bigint[] = [];
   readonly #wait = new Map<number, number>();
   readonly #spans: Uint8Array[] = [];
+  readonly #stage: DiagnosticStage;
   #instance?: WebAssembly.Instance;
+  #instanceStarted?: number;
+  #stageStarted?: number;
   #ordinal = 0;
   #nextTime = 0;
   #pending?: StagePipe;
@@ -137,6 +142,9 @@ class InstanceRun {
   #redirected = false;
 
   constructor(private readonly call: ReplayCall, private readonly prefix?: Prefix) {
+    const mode = call.snapshot.argv[1];
+    this.#stage = mode === "-plan" ? "plan" : "parent";
+    if (prefix) this.#stage = mode === "-leaf" ? "leaf" : wholeStages[prefix.record.ordinal];
     this.#journal = new Journal(call.createSha256, prefix);
     this.#argvDigest = digest(call.createSha256, ["argv", ...call.snapshot.argv]);
     this.#journal.active = call.stages !== 0;
@@ -190,6 +198,11 @@ class InstanceRun {
       if (configure(pages) !== 0) throw new WasiFault("guest memory limit setup failed");
       const start = this.#instance.exports._start;
       if (typeof start !== "function") throw new WasiFault("missing guest entry point");
+      if (this.call.diagnostics) {
+        this.#instanceStarted = performance.now();
+        if (this.#stage === "plan") this.#stageStarted = this.#instanceStarted;
+        this.call.record({ schema: 1, phase: "instance", code: "start", stage: this.#stage });
+      }
       let status = 0;
       try {
         start();
@@ -214,8 +227,28 @@ class InstanceRun {
       }
       return { status, ...this.#wasi.takeStreams() };
     } finally {
+      const memory = this.#instanceStarted === undefined ? undefined : this.#instance?.exports.memory;
       this.#instance = undefined;
       this.#wasi.discardStreams();
+      if (this.#instanceStarted !== undefined && memory instanceof WebAssembly.Memory) {
+        this.#completeDiagnostics(memory);
+      }
+    }
+  }
+
+  #completeDiagnostics(memory: WebAssembly.Memory) {
+    try {
+      if (this.#stageStarted !== undefined) {
+        this.call.record({ schema: 1, phase: "stage", code: "elapsed", stage: this.#stage,
+          elapsedNs: elapsedNs(this.#stageStarted) });
+      } else if (this.prefix && this.#instanceStarted !== undefined) {
+        this.call.record({ schema: 1, phase: "replay", code: "elapsed", stage: this.#stage,
+          elapsedNs: elapsedNs(this.#instanceStarted) });
+      }
+      this.call.record({ schema: 1, phase: "instance", code: "end", stage: this.#stage,
+        peakLinearBytes: memory.buffer.byteLength });
+    } catch {
+      // An observation can fail during teardown without affecting the call.
     }
   }
 
@@ -280,6 +313,11 @@ class InstanceRun {
       this.#journal.active = false;
       this.#childPipe = pipe;
       this.#wasi.beginChild();
+      if (this.#instanceStarted !== undefined) {
+        this.#stageStarted = performance.now();
+        this.call.record({ schema: 1, phase: "replay", code: "elapsed", stage: this.#stage,
+          elapsedNs: elapsedNs(this.#instanceStarted, this.#stageStarted) });
+      }
       return 0;
     }
 
@@ -320,7 +358,8 @@ class ReplayCall {
   readonly output: OutputBudget;
 
   constructor(readonly module: WebAssembly.Module, readonly snapshot: CallSnapshot,
-              readonly createSha256: CreateSha256, readonly limits: RunLimits) {
+              readonly createSha256: CreateSha256, readonly limits: RunLimits,
+              readonly diagnostics?: (event: InstanceDiagnostic) => void) {
     const mode = snapshot.argv[1];
     this.stages = mode === "-plan" ? 0 : mode === "-key" || mode === "-leaf" ? 1 : 3;
     this.output = new OutputBudget(limits.outputBytes);
@@ -329,11 +368,16 @@ class ReplayCall {
   clock(): bigint {
     return BigInt(Math.floor(performance.now() * 1e6));
   }
+
+  record(event: InstanceDiagnostic): void {
+    try { this.diagnostics?.(event); } catch { /* Observations cannot change a result. */ }
+  }
 }
 
 function run(module: WebAssembly.Module, snapshot: CallSnapshot, createSha256: CreateSha256,
-             limits: RunLimits): GuestResult {
-  const call = new ReplayCall(module, snapshot, createSha256, limits);
+             limits: RunLimits, diagnostics?: (event: InstanceDiagnostic) => void, setupStarted?: number): GuestResult {
+  const call = new ReplayCall(module, snapshot, createSha256, limits, diagnostics);
+  if (setupStarted !== undefined) call.record({ schema: 1, phase: "setup", code: "elapsed", elapsedNs: elapsedNs(setupStarted) });
   try {
     const result = new InstanceRun(call).run();
     if (!call.failure) return { ...result, failure: null };
@@ -348,10 +392,12 @@ export function refusal(failure: Failure): GuestResult {
 }
 
 export function replayGuest(module: WebAssembly.Module, capture: () => CallSnapshot,
-                            createSha256: CreateSha256, overrides: Partial<RunLimits> = {}): GuestResult {
+                            createSha256: CreateSha256, overrides: Partial<RunLimits> = {},
+                            diagnostics?: (event: InstanceDiagnostic) => void): GuestResult {
   if (activeCalls >= BASELINE_LIMITS.concurrentCalls) return refusal("busy");
   activeCalls++;
   try {
+    const setupStarted = diagnostics ? performance.now() : undefined;
     let limits: RunLimits;
     try {
       limits = lowerLimits(overrides);
@@ -361,7 +407,7 @@ export function replayGuest(module: WebAssembly.Module, capture: () => CallSnaps
     const snapshot = capture();
     let result: GuestResult;
     try {
-      result = run(module, snapshot, createSha256, limits);
+      result = run(module, snapshot, createSha256, limits, diagnostics, setupStarted);
     } catch (error) {
       result = refusal(classify(error));
     }

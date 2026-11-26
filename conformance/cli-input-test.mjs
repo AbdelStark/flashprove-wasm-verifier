@@ -9,12 +9,12 @@ import { NodeSupervisor } from "../build/ts/host/node-supervisor.js";
 const native = resolve("build/native/cp_verify");
 const module = new WebAssembly.Module(readFileSync("build/wasm/cp_verify.wasm"));
 const supervisor = new NodeSupervisor();
-async function check(label, args, dir, status, verdict) {
+async function check(label, args, dir, status, verdict, diagnostics) {
   const oracle = spawnSync(native, args, { cwd: dir });
   if (oracle.error) throw oracle.error;
   assert.equal(oracle.status, status, label);
   if (verdict) assert.equal(oracle.stdout.toString().trimEnd().split("\n").at(-1), verdict, label);
-  const guest = await supervisor.run(module, args, { workingDirectory: dir });
+  const guest = await supervisor.run(module, args, { workingDirectory: dir, diagnostics });
   assert.equal(guest.failure, null, label);
   assert.equal(guest.status, status, label);
   assert.ok(oracle.stdout.equals(guest.stdout), `${label}: stdout differs`);
@@ -38,8 +38,16 @@ try {
   renameSync(join(dir, "-config"), join(dir, "config"));
   mkdirSync(join(dir, "sub"));
   await check("parent-relative paths", ["-plan", "id", "../config", "../ivk/key.bin"], join(dir, "sub"), 4, plan);
-  await check("part call below the verification bar", ["-key", "config", "ivk/key.bin", "-bits", "127", "-q"],
-    dir, 14, "NOT-A-VERIFICATION");
+  const events = [];
+  await check("part call below the verification bar with diagnostics", ["-key", "config", "ivk/key.bin", "-bits", "127", "-q"],
+    dir, 14, "NOT-A-VERIFICATION", event => { events.push(event); });
+  assert.deepEqual(events[0], {
+    schema: 1, phase: "provenance", code: "build",
+    build: readFileSync("build/wasm/source.sha256", "ascii").trim(),
+    port: readFileSync("build/wasm/port.sha256", "ascii").trim(),
+  });
+  assert.ok(events.some(event => event.phase === "instance" && event.code === "end" && event.stage === "key"));
+  console.log("CLI inputs: diagnostics provenance matches both build digests");
 
   const common = ["config", "ivk", "example.req", "example.y"];
   await check("invalid option precedes missing inputs", ["missing-config", ...common.slice(1), "missing.proof", "-bad"], dir, 2);

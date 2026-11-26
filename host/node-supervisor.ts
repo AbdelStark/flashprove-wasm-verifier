@@ -2,10 +2,12 @@
 
 import { cwd } from "node:process";
 import { Worker } from "node:worker_threads";
+import { buildDiagnostic, elapsedNs, readInstanceDiagnostics } from "./diagnostics.js";
+import type { DiagnosticsSink, DiagnosticsV1 } from "./diagnostics.js";
 import { BASELINE_LIMITS } from "./limits.js";
 import { captureArguments, InputError } from "./namespace.js";
 import { readNodeReply } from "./node-worker-protocol.js";
-import type { NodeWorkerRequest } from "./node-worker-protocol.js";
+import type { NodeWorkerReply, NodeWorkerRequest } from "./node-worker-protocol.js";
 import { refusal } from "./replay.js";
 import type { Failure, GuestResult } from "./replay.js";
 
@@ -32,8 +34,30 @@ export class NodeSupervisor {
   }
 
   async run(module: WebAssembly.Module, args: readonly string[],
-            options: { deadlineMs?: number; workingDirectory?: string } = {}): Promise<GuestResult> {
-    if (this.#busy) return refusal("busy");
+            options: { deadlineMs?: number; workingDirectory?: string; diagnostics?: DiagnosticsSink } = {}): Promise<GuestResult> {
+    const sink = options.diagnostics;
+    const began = sink ? performance.now() : undefined;
+    const report = (result: GuestResult, workerDiagnostics?: unknown): GuestResult => {
+      if (!sink || began === undefined) return result;
+      const elapsed = elapsedNs(began);
+      const failure = result.failure;
+      queueMicrotask(() => {
+        const events: DiagnosticsV1[] = [];
+        const provenance = buildDiagnostic(module);
+        if (provenance) events.push(provenance);
+        events.push(...readInstanceDiagnostics(workerDiagnostics),
+          { schema: 1, phase: "call", code: "elapsed", elapsedNs: elapsed });
+        if (failure) {
+          const admission = failure === "busy" || failure === "invalid-input" || failure === "input-limit";
+          events.push({ schema: 1, phase: admission ? "admission" : "call", code: failure });
+        }
+        for (const event of events) {
+          try { void Promise.resolve(sink(event)).catch(() => {}); } catch { /* The result is already decided. */ }
+        }
+      });
+      return result;
+    };
+    if (this.#busy) return report(refusal("busy"));
     this.#busy = true;
     let worker: WorkerConnection;
     let request: NodeWorkerRequest;
@@ -49,18 +73,20 @@ export class NodeSupervisor {
       request = {
         schema: 1, requestId: ++this.#requestId, module,
         argv: captureArguments(args, "cp_verify"), workingDirectory: options.workingDirectory ?? cwd(),
+        ...(sink ? { diagnostics: true } : {}),
       };
       if (this.#now() >= deadline) {
         this.#busy = false;
-        return refusal("timeout");
+        return report(refusal("timeout"));
       }
       worker = this.#start();
     } catch (error) {
       this.#busy = false;
-      return refusal(error instanceof InputError ? error.code : "worker");
+      return report(refusal(error instanceof InputError ? error.code : "worker"));
     }
     return new Promise(resolve => {
       let result: GuestResult | undefined;
+      let workerDiagnostics: unknown;
       let decided = false;
       let timer: ReturnType<typeof setTimeout>;
 
@@ -69,6 +95,7 @@ export class NodeSupervisor {
         decided = true;
         clearTimeout(timer);
         resolve(terminal);
+        report(terminal, terminal === result ? workerDiagnostics : undefined);
       };
       const stop = (reason: Failure) => {
         if (decided) return;
@@ -102,7 +129,11 @@ export class NodeSupervisor {
           return;
         }
         result = readNodeReply(value, request);
-        if (!result) stop("worker");
+        if (!result) {
+          stop("worker");
+        } else if (sink) {
+          workerDiagnostics = (value as NodeWorkerReply).diagnostics;
+        }
       });
       worker.once("messageerror", deliveryFailure);
       worker.once("error", deliveryFailure);

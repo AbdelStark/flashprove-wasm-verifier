@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { InstanceDiagnostic } from "./diagnostics.js";
 import type { RunLimits } from "./limits.js";
 import type { CallSnapshot } from "./namespace.js";
 import { replayGuest } from "./replay.js";
@@ -11,6 +12,7 @@ function createSha256() {
   };
 }
 
-export function runNodeGuest(module: WebAssembly.Module, capture: () => CallSnapshot, limits?: Partial<RunLimits>) {
-  return replayGuest(module, capture, createSha256, limits);
+export function runNodeGuest(module: WebAssembly.Module, capture: () => CallSnapshot, limits?: Partial<RunLimits>,
+                             diagnostics?: (event: InstanceDiagnostic) => void) {
+  return replayGuest(module, capture, createSha256, limits, diagnostics);
 }

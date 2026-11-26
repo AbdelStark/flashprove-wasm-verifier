@@ -28,8 +28,11 @@ for src in "${sources[@]}"; do
     -MJ "$work/$name.command.json" -c "$src" -o "$work/$name.o"
 done
 "$wasm_cxx" -fwasm-exceptions "$work/cp_verify.o" "$work/baseline.o" "$work/process.o" "$work/memory.o" \
-  "${wasm_link[@]}" "${wasm_memory_link[@]}" -o "$work/cp_verify.wasm"
-python3 "$ROOT/scripts/audit_wasm.py" "$work" "$digest" "$out/audit-observed.json" \
+  "${wasm_link[@]}" "${wasm_memory_link[@]}" -o "$work/linked.wasm"
+printf 'build=%s\nport=%s\n' "$digest" "$port" > "$work/provenance"
+"$ROOT/.toolchain/wasi-sdk/bin/llvm-objcopy" --add-section="fpv.provenance=$work/provenance" \
+  "$work/linked.wasm" "$work/cp_verify.wasm"
+python3 "$ROOT/scripts/audit_wasm.py" "$work" "$digest" "$port" "$out/audit-observed.json" \
   -fwasm-exceptions "${wasm_link[@]}" "${wasm_memory_link[@]}"
 printf '%s\n' "$digest" > "$work/source.sha256"
 printf '%s\n' "$port" > "$work/port.sha256"

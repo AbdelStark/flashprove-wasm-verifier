@@ -44,7 +44,7 @@ type VerifyResult = Readonly<{
 ## Artifact versions
 
 ```text
-DiagnosticsV1 = {schema: 1, phase, code, stage?, elapsedNs?, peakLinearBytes?}
+DiagnosticsV1 = {schema: 1, phase, code, stage?, elapsedNs?, peakLinearBytes?, build?, port?}
 ConformanceReportV1 = {schema: 1, upstreamCommit, toolchainSha256, moduleSha256,
   runtime, cases: CaseResultV1[], counts, safetyViolations, equalityDifferences,
   status?, gates?}
