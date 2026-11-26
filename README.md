@@ -5,7 +5,7 @@
 **A WebAssembly build of the pinned FlashProve verifier.**
 
 [![check](https://img.shields.io/github/actions/workflow/status/AbdelStark/flashprove-wasm-verifier/check.yml?branch=main&style=for-the-badge&label=check)](https://github.com/AbdelStark/flashprove-wasm-verifier/actions/workflows/check.yml)
-[![status](https://img.shields.io/badge/status-spec%20draft-f59e0b?style=for-the-badge)](SPEC.md)
+[![status](https://img.shields.io/badge/status-Node%20CLI-f59e0b?style=for-the-badge)](SPEC.md)
 [![FlashProve](https://img.shields.io/badge/FlashProve-0.16.0%20%40%209e2bdd8-0ea5e9?style=for-the-badge)](https://github.com/anthropics/FlashProve/tree/9e2bdd8ff5bf9c62f18263d7dac189b0400b260c)
 [![target](https://img.shields.io/badge/target-wasm32--wasip1-654ff0?style=for-the-badge&logo=webassembly&logoColor=white)](docs/adr/0002-wasi-sdk-target.md)
 [![license](https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge)](LICENSE)
@@ -18,10 +18,10 @@ An AI provider tells you a reply came from the model it committed to. With [Flas
 
 Today, running that check means building C++17 with g++ on Linux. So in practice the check happens where the toolchain lives, not where the reply lands.
 
-This project compiles the same verifier to WebAssembly. One module, one hash, and the check runs in a browser tab, a Node script, an edge function, or Wasmtime on a server. Whoever receives the reply can check it.
+This project compiles the same verifier to WebAssembly. The Node command runs whole proofs, and Wasmtime checks parts and plans independently against the pinned reference.
 
 > [!NOTE]
-> **Spec stage.** The checked-in build targets and host are scaffolding. The [v1 specification](SPEC.md) defines the planned interfaces, conformance gates and release milestones.
+> The Node command is available from source. The [v1 specification](SPEC.md) tracks the remaining interfaces, conformance gates and release milestones.
 
 ## The one rule
 
@@ -50,14 +50,20 @@ Every design choice serves that rule. The native `cp_verify`, built by upstream'
 
 **Hostile files, bounded.** Upstream does not cap input sizes. The host does, and every way a run can go wrong (a trap, running out of memory, a hit limit) ends in `NOT CHECKED`, never in a pass. [R-MEM-2](SPEC.md#47-memory-and-hostile-inputs)
 
-## What it will look like
+## Run a proof with Node
 
-Planned interfaces, from [SPEC.md § 4.10](SPEC.md#410-interfaces). Not published yet.
+On x86_64 Linux with procfs and Node 24, build the local command and run the checksum-checked upstream example. The example uses the ID published with that fixture. For other proofs, use a commitment ID from a source you trust.
 
 ```sh
-# M2: the same arguments, output and exit codes as cp_verify
-npx fpv config/ ivk/ example.req example.y example.proof -id "$TRUSTED_ID"
+make cli
+fixture=.upstream/FlashProve/examples/accepted-proof
+./bin/fpv "$fixture/config" "$fixture/ivk" "$fixture/example.req" \
+  "$fixture/example.y" "$fixture/example.proof" -id "$(cat "$fixture/ID.txt")" -q
 ```
+
+The call returns exit 0 and ends in `YES`. The CLI uses the same arguments and output streams as `cp_verify`. [CLI contract](docs/spec/02-public-api.md#cli)
+
+## Planned browser API
 
 ```ts
 // M3: in a browser, inside a Web Worker

@@ -36,5 +36,6 @@ python3 "$ROOT/scripts/audit_wasm.py" "$work" "$digest" "$port" "$out/audit-obse
   -fwasm-exceptions "${wasm_link[@]}" "${wasm_memory_link[@]}"
 printf '%s\n' "$digest" > "$work/source.sha256"
 printf '%s\n' "$port" > "$work/port.sha256"
-mv "$work/source.sha256" "$work/port.sha256" "$work/cp_verify.wasm" "$out/"
+sha256 "$work/cp_verify.wasm" | cut -c1-64 > "$work/cp_verify.wasm.sha256"
+mv "$work/source.sha256" "$work/port.sha256" "$work/cp_verify.wasm.sha256" "$work/cp_verify.wasm" "$out/"
 printf 'build=%s dw=8\nport=%s\n' "$digest" "$port"

@@ -12,7 +12,6 @@ The Node supervisor runs the guest in a fresh worker and owns the 600-second dea
 
 Pass a `diagnostics` callback in the supervisor options to receive bounded provenance, timing, lifecycle and failure records. The callback receives records after the terminal decision. Guest output remains available through the original byte streams. [Diagnostics schema](../docs/spec/05-observability.md#runtime-diagnostics)
 
-Two front ends share it:
+Run `make cli` to build the local `./bin/fpv` command. `make replay-test` invokes that executable against the pinned native oracle. `make scoped-disk-test` checks byte delivery, broken pipes and module integrity. [CLI contract](../docs/spec/02-public-api.md#cli)
 
-- `fpv`, a Node command with `cp_verify`'s arguments, output and exit codes (R-API-1)
-- `verify(files, args)` for browsers and servers, run in a Web Worker in the browser (R-API-2), with `checkAcceptance()` beside it (R-API-3)
+The planned `verify(files, args)` interface for browsers and servers uses the same replay core (R-API-2), with `checkAcceptance()` beside it (R-API-3).

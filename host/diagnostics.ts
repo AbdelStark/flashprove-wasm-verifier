@@ -2,7 +2,7 @@ import { BASELINE_LIMITS, PAGE_BYTES } from "./limits.js";
 
 export const failureCodes = [
   "abi", "trap", "replay-mismatch", "invalid-input", "input-limit", "output-limit",
-  "memory-limit", "runtime-oom", "busy", "host-io", "host-internal", "timeout", "worker",
+  "memory-limit", "runtime-oom", "busy", "host-io", "host-internal", "timeout", "worker", "integrity",
 ] as const;
 export type Failure = typeof failureCodes[number];
 

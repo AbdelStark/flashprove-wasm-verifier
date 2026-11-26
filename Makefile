@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 SEEDS ?= 1000
 
-.PHONY: help bootstrap upstream check reference native-c1 build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites conformance memory-probe fuzz test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -24,6 +24,10 @@ native-c1: reference ## check published native whole calls, part calls and plans
 
 build: bootstrap upstream ## compile the single-threaded WebAssembly module
 	@scripts/build-wasm.sh
+
+cli: build ## build the local fpv command with Node 24
+	@npm ci --ignore-scripts --no-audit --no-fund
+	@npm run build:host
 
 wasm-build-test: build ## test the Wasm build digest, fallback paths and thread arguments
 	@conformance/wasm-build-test.sh
