@@ -2,7 +2,7 @@
 
 # flashprove-wasm-verifier
 
-**Check a FlashProve proof anywhere WebAssembly runs.<br>Same verifier. Same verdict. Nothing to install.**
+**A WebAssembly build of the pinned FlashProve verifier.**
 
 [![check](https://img.shields.io/github/actions/workflow/status/AbdelStark/flashprove-wasm-verifier/check.yml?branch=main&style=for-the-badge&label=check)](https://github.com/AbdelStark/flashprove-wasm-verifier/actions/workflows/check.yml)
 [![status](https://img.shields.io/badge/status-spec%20draft-f59e0b?style=for-the-badge)](SPEC.md)
@@ -21,7 +21,7 @@ Today, running that check means building C++17 with g++ on Linux. So in practice
 This project compiles the same verifier to WebAssembly. One module, one hash, and the check runs in a browser tab, a Node script, an edge function, or Wasmtime on a server. Whoever receives the reply can check it.
 
 > [!NOTE]
-> **Spec stage.** Nothing verifies yet. What is here: the [technical spec](SPEC.md), the [decisions](docs/adr/), pinned and hash-checked upstream and toolchain, and the scaffolding the milestones build on. If you want to shape it, now is the moment.
+> **Spec stage.** The checked-in build targets and host are scaffolding. The [v1 specification](SPEC.md) defines the planned interfaces, conformance gates and release milestones.
 
 ## The one rule
 
@@ -63,13 +63,15 @@ npx fpv config/ ivk/ example.req example.y example.proof -id "$TRUSTED_ID"
 // M3: in a browser, inside a Web Worker
 import { verify, checkAcceptance } from "flashprove-wasm-verifier";
 
-const result = await verify(files, ["-id", trustedId]);
+const result = await verify(files, [
+  "/config", "/ivk", "/request", "/token", "/proof", "-id", trustedId,
+]);
 result.verdict;   // "YES"
 result.resultV1;  // { status: "0", claim: "exact-match", id: "...", bits: "128", ... }
 
 // A YES is not acceptance. This applies upstream's acceptance rule, point by point,
 // to facts only you have: the ID from a source you trust, your tokens, your policy.
-checkAcceptance(result, { id: trustedId, tokens, policy });
+const decision = checkAcceptance(result, expected); // independent caller expectations
 ```
 
 ## Roadmap
@@ -80,7 +82,7 @@ checkAcceptance(result, { id: trustedId, tokens, policy });
 | ☐ | **M1** One stage | port audit as a test, field and hash known answers, tables equal, `-key` and `-leaf` part-calls pass in Wasmtime |
 | ☐ | **M2** Whole call | fork by replay, `fpv` on Node, published and altered proofs match the native verdicts, 1,000 fuzz seeds clean |
 | ☐ | **M3** Browser | TypeScript package, Web Worker, `checkAcceptance`, an offline demo page |
-| ☐ | **M4** Speed | threads, SIMD, wide multiplication; a measured report against native and Bend |
+| ☐ | **M4** Speed | evaluate threads, SIMD and wide multiplication; measure whole calls against native and Bend |
 | ☐ | **M5** Release | reproducible builds, fuzzing in CI, signed releases with published hashes |
 
 No speed numbers until M4, and then only with their protocol: runtime, CPU, fixture, runs, statistic.

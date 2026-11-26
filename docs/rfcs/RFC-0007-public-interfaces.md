@@ -35,10 +35,11 @@ type WorkerRequestV1 = Readonly<{
 }>;
 type WorkerReplyV1 = Readonly<{
   schema: 1; requestId: number; result: VerifyResult;
+  evidence?: CompletedCallEvidenceV1;
 }>;
 ```
 
-The supervisor sends only copies in the transfer list. It checks schema, request ID and terminal result consistency. Within one supervisor only one call runs by default. The caller's original buffers stay attached. The worker uses the baseline module, validates its hash against release metadata, and instantiates one parent and fresh children. The supervisor owns deadline enforcement and settles the promise exactly once. Discard late messages after teardown. Do not parse stage stdout for an acceptance decision.
+CompletedCallEvidenceV1 carries the validated module hash, call mode, argument facts and consumed request/token digests specified in RFC-0008. Only the trusted worker can supply it. The supervisor sends only copies in the transfer list. It checks schema, request ID and terminal result consistency. Within one supervisor only one call runs by default. The caller's original buffers stay attached. The worker uses the baseline module, validates its hash against release metadata, and instantiates one parent and fresh children. The supervisor owns deadline enforcement and settles the promise exactly once. Discard late messages after teardown. Do not parse stage stdout for an acceptance decision.
 
 The offline demo is an ordinary static bundle containing module, worker, manifest and preloaded or locally selected verified public examples. Generate fixture assets from the pinned source and keep them out of source control. Display verdict, coverage and caller-acceptance outcome separately, with explicit fixture provenance. The loaded bundle runs with network disabled. For local files, document the supported static serving path when browsers restrict workers on file URLs. Keyboard users can select a fixture, trigger verification and reach the result. Expose pending and terminal state to assistive technology.
 
