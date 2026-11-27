@@ -111,5 +111,15 @@ def main():
     return 0 if passed else 1
 
 
+def once(family):
+    """One whole call in this process, for wall-clock benchmarks: stdout and stderr pass through."""
+    _, result, _, _, _ = guest(family, MAX_PAGES)
+    sys.stdout.buffer.write(result.stdout)
+    sys.stderr.buffer.write(result.stderr)
+    return result.status
+
+
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["--once"]:
+        sys.exit(once(sys.argv[2]))
     sys.exit(main())
