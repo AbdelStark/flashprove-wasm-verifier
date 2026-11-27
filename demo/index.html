@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlashProve offline verifier</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1b1b1f; --muted: #5b5b66; --bg: #fbfbfd; --line: #d8d8e0; --ok: #116b3b; --no: #a1261d; --focus: #1f5fd1; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #ececf1; --muted: #a2a2ad; --bg: #141418; --line: #34343c; --ok: #6fd49b; --no: #ff8f85; --focus: #8fb4ff; } }
+  body { margin: 0 auto; max-width: 46rem; padding: 1.5rem 1rem 3rem; font: 16px/1.5 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1rem; margin: 0 0 .5rem; }
+  p.lead { color: var(--muted); margin: 0 0 1.5rem; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; padding: .75rem 1rem; margin: 0 0 1rem; }
+  legend { font-weight: 600; padding: 0 .25rem; }
+  label { display: block; padding: .25rem 0; }
+  button { font: inherit; padding: .5rem 1.25rem; border-radius: 6px; border: 1px solid var(--line); background: var(--fg); color: var(--bg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  #status { min-height: 1.5rem; margin: 1rem 0; }
+  section { border-top: 1px solid var(--line); padding: 1rem 0; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: .9rem; }
+  .accepted { color: var(--ok); font-weight: 700; }
+  .rejected { color: var(--no); font-weight: 700; }
+  .note { color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>FlashProve offline verifier</h1>
+  <p class="lead">Checks a published FlashProve proof in this browser with the pinned WebAssembly build. After the page loads, nothing needs the network.</p>
+  <form id="form">
+    <fieldset id="fixtures" disabled>
+      <legend>Published proof</legend>
+    </fieldset>
+    <button id="verify" type="submit" disabled>Verify</button>
+  </form>
+  <p id="status" role="status" aria-live="polite">Loading the verifier and the proofs…</p>
+  <div id="results" aria-busy="false" hidden>
+    <section aria-labelledby="h-verdict">
+      <h2 id="h-verdict">Verification</h2>
+      <dl><dt>Exit code</dt><dd id="exit"></dd><dt>Verdict</dt><dd id="verdict"></dd><dt>Host failure</dt><dd id="failure"></dd></dl>
+    </section>
+    <section aria-labelledby="h-coverage">
+      <h2 id="h-coverage">What was checked</h2>
+      <dl id="coverage"></dl>
+    </section>
+    <section aria-labelledby="h-acceptance">
+      <h2 id="h-acceptance">Caller acceptance</h2>
+      <p id="acceptance"></p>
+      <p class="note">A verdict says the proof checks. Acceptance also needs the eight points of upstream's rule, against values a caller holds before the reply. This demo takes those values from the published example and the bundle's manifest, and it counts proof of work and accepts the theorem on codes as the examples require.</p>
+    </section>
+    <section aria-labelledby="h-provenance">
+      <h2 id="h-provenance">Provenance</h2>
+      <dl id="provenance"></dl>
+    </section>
+  </div>
+</main>
+<script type="module" src="./demo.js"></script>
+</body>
+</html>
