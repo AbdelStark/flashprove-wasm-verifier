@@ -31,6 +31,6 @@ port.once("message", (value: unknown) => {
   const stdout = result.stdout.slice(), stderr = result.stderr.slice();
   const reply: NodeWorkerReply = { schema: 1, requestId: request.requestId, result: { ...result, stdout, stderr },
     ...(diagnostics ? { diagnostics } : {}) };
+  // The once listener is gone, so the worker exits on its own; Deno's parentPort has no close().
   port.postMessage(reply, [stdout.buffer, stderr.buffer]);
-  port.close();
 });
