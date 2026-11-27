@@ -1,0 +1,104 @@
+name: Release
+# RFC-0010. A v* tag publishes for real with the maintainer's key. A manual run is a dry run: an
+# ephemeral key, a local store, an interrupted upload and its identical-bytes retry. Both require a
+# successful release-gates run for the same commit and stage only the module those gates tested.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer version for the dry run
+        required: true
+        default: 1.0.0-rc.0
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      actions: read
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Version and OpenSSL
+        run: |
+          if [ "$DRY_RUN" = true ]; then version='${{ inputs.version }}'; else version="${GITHUB_REF_NAME#v}"; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          openssl version
+      - name: Require passed release gates for this commit
+        run: |
+          run=$(gh run list --workflow release-gates.yml --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -z "$run" ]; then echo "no successful release-gates run for $GITHUB_SHA" >&2; exit 1; fi
+          gh run download "$run" --name release-evidence --dir build/release
+      - name: Candidate dispositions are recorded
+        run: test -f docs/adr/0009-reject-auto-vectorized-simd.md && test -f docs/adr/0010-wide-arithmetic-stays-opt-in.md && test -f docs/adr/0011-no-threaded-candidate-for-v1.md
+      - name: Build the module, package and demo
+        run: FPV_VERSION="$VERSION" make package
+      - name: Install the archive and verify the demo offline
+        run: |
+          npx playwright install --with-deps chromium
+          node conformance/package-test.mjs
+          node conformance/demo-test.mjs
+      - name: Stage the release
+        run: python3 -B scripts/release.py stage --version "$VERSION" --out build/release-stage
+      - name: Sign the manifest
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          if [ "$DRY_RUN" = true ]; then
+            openssl genpkey -algorithm ed25519 -out "$RUNNER_TEMP/key.pem"
+            openssl pkey -in "$RUNNER_TEMP/key.pem" -pubout -out "$RUNNER_TEMP/public.pem"
+          else
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/key.pem"
+            cp release/signing-key.pub.pem "$RUNNER_TEMP/public.pem"
+          fi
+          python3 -B scripts/release.py sign --dir build/release-stage --key "$RUNNER_TEMP/key.pem"
+          rm -f "$RUNNER_TEMP/key.pem"
+      - name: Verify the signature and every artifact before publication
+        env:
+          FINGERPRINT: ${{ vars.RELEASE_KEY_FINGERPRINT }}
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            python3 -B scripts/release.py verify --dir build/release-stage --public-key "$RUNNER_TEMP/public.pem"
+            cp build/release-stage/manifest.json build/release-stage/manifest.json.orig
+            sed -i 's/"abi": 1/"abi": 2/' build/release-stage/manifest.json
+            ! python3 -B scripts/release.py verify --dir build/release-stage --public-key "$RUNNER_TEMP/public.pem"
+            mv build/release-stage/manifest.json.orig build/release-stage/manifest.json
+          else
+            test -n "$FINGERPRINT"
+            python3 -B scripts/release.py verify --dir build/release-stage --public-key "$RUNNER_TEMP/public.pem" --fingerprint "$FINGERPRINT"
+          fi
+      - name: Publish (dry run rehearses an interrupted upload and its retry)
+        run: |
+          if [ "$DRY_RUN" = true ]; then
+            ! python3 -B scripts/release.py publish --dir build/release-stage --store build/published --stop-after 3
+            python3 -B scripts/release.py publish --dir build/release-stage --store build/published
+          else
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "$GITHUB_REF_NAME" --notes-file build/release-stage/evidence/release-evidence.json
+            python3 -B scripts/release.py publish --dir build/release-stage --github-release "$GITHUB_REF_NAME"
+            gh release edit "$GITHUB_REF_NAME" --draft=false
+          fi
+      - name: Verify what was published from a fresh download
+        run: |
+          mkdir -p build/downloaded
+          if [ "$DRY_RUN" = true ]; then
+            cp -R build/published/. build/downloaded/
+          else
+            python3 -B scripts/release.py download --github-release "$GITHUB_REF_NAME" --out build/downloaded
+          fi
+          python3 -B scripts/release.py verify --dir build/downloaded --public-key "$RUNNER_TEMP/public.pem"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-stage
+          path: build/release-stage
+          if-no-files-found: error

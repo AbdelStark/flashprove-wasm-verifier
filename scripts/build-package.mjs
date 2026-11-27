@@ -7,7 +7,9 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
-const VERSION = "1.0.0-alpha.0";
+// A release sets FPV_VERSION; local builds stay on the prerelease line.
+const VERSION = process.env.FPV_VERSION ?? "1.0.0-alpha.0";
+if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/.test(VERSION)) throw new Error(`${VERSION} is not a SemVer version`);
 const stage = "build/package";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 const walk = directory => readdirSync(directory).flatMap(name => {
