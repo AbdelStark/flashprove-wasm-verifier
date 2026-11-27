@@ -1,0 +1,4 @@
+# Benchmark-only references for R-PERF-2. They are not inputs of the verifier build, so a change here
+# is not a pin move under rule 5. The exact revision is recorded in every benchmark report.
+BEND_VERIFIER_REPO=https://github.com/AbdelStark/flashprove-bend-verifier.git
+BEND_VERIFIER_COMMIT=53a3d87befd9b27348d794529d68c9ff89a58247

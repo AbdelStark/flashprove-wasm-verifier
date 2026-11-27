@@ -1,0 +1,35 @@
+name: Benchmark
+# R-PERF-1 and R-PERF-2: full-size whole calls on one x86_64 Linux runner, one warmup and three
+# measured calls per runtime. Hosted runners are virtual machines, and the report says so.
+on:
+  pull_request:
+    paths:
+      - conformance/bench*.py
+      - conformance/bench-browser.mjs
+      - scripts/bench-bend.sh
+      - bench.lock
+      - .github/workflows/bench.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bench:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Browser system dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund && npx playwright install --with-deps chromium firefox webkit
+      - name: Check the benchmark gate
+        run: make bench-test
+      - name: Measure full-size whole calls
+        run: make bench
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark
+          path: build/bench/*.json
+          if-no-files-found: error

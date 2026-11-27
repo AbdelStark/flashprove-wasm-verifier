@@ -4,7 +4,7 @@ SEEDS ?= 1000
 FUZZ_JOBS ?= 1
 FUZZ_SHARD ?= 0/1
 
-.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe wasmtime-whole fuzz fuzz-test release-gate-test release-gate test c7-test scoped-disk-test verify-test acceptance-test browser-test demo demo-test package package-test replay-transport-test replay-test memory-limit-test repro bench rehearse-pin clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe wasmtime-whole fuzz fuzz-test release-gate-test release-gate test c7-test scoped-disk-test verify-test acceptance-test browser-test demo demo-test package package-test replay-transport-test replay-test memory-limit-test repro bench rehearse-pin bench-test clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -132,8 +132,13 @@ repro: bootstrap upstream ## build the module in two clean roots from the commit
 rehearse-pin: bootstrap upstream ## rehearse moving upstream.lock to COMMIT in an isolated worktree (build/rehearsal-*.json)
 	@scripts/rehearse-pin.sh "$(COMMIT)"
 
-bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
-	@scripts/not-yet.sh $@ M4
+bench: build reference cli ## measure full-size whole calls: native, Bend, Wasmtime, Node, Chromium, Firefox, WebKit (BenchmarkV1)
+	@scripts/bootstrap-wasmtime-python.sh
+	@npx playwright install chromium firefox webkit
+	@.toolchain/wasmtime-python/bin/python -B -m conformance.bench run
+
+bench-test: upstream ## check that the benchmark gate rejects incomplete or incomparable reports
+	@python3 -B -m unittest conformance.bench_test
 
 clean: ## remove build outputs (keeps .upstream and .toolchain)
 	rm -rf build
