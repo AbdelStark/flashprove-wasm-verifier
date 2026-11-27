@@ -1,6 +1,6 @@
 # 0006. Full-size memory envelope
 
-- Status: Accepted
+- Status: Accepted. The parent cap is superseded by [ADR 0008](0008-parent-holds-capped-inputs.md).
 - Requirements: R-MEM-1, R-MEM-2, R-PERF-1
 
 ## Context

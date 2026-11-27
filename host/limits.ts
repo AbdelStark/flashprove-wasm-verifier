@@ -1,9 +1,9 @@
-/** Measured baseline envelope from ADR 0006. */
+/** Measured baseline envelope from ADR 0006; the parent cap is from ADR 0008. */
 
 export const BASELINE_LIMITS = Object.freeze({
   fileBytes: 64 * 2 ** 20,
   totalInputBytes: 128 * 2 ** 20,
-  parentPages: 2048,
+  parentPages: 9216,
   childPages: 57344,
   outputBytes: 8 * 2 ** 20,
   deadlineMs: 600_000,

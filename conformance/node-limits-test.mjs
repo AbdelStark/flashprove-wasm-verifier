@@ -23,6 +23,11 @@ function expectFailure(result, failure) {
   assert.equal(result.stderr.length, 0);
 }
 
+test("the parent cap covers the string growth bound for all retained input (ADR 0008)", () => {
+  assert.ok(BASELINE_LIMITS.parentPages * PAGE_BYTES >= 4 * BASELINE_LIMITS.totalInputBytes);
+  assert.ok(BASELINE_LIMITS.parentPages <= BASELINE_LIMITS.childPages);
+});
+
 test("planning runs with the stage cap and successful growth reaches the cap exactly", () => {
   assert.equal(runNodeGuest(probe, capture("zero"), { childPages: pages }).status, 0);
   expectFailure(runNodeGuest(probe, capture("zero"), { childPages: pages - 1 }), "memory-limit");
