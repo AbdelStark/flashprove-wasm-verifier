@@ -85,6 +85,7 @@ class ProcessHost(Wasi):
         self.redirected = False
         self.wait_words = {}
         self.fault = False
+        self.replays = []
 
     def tick(self):
         if not self.recording:
@@ -192,6 +193,9 @@ class ProcessHost(Wasi):
             self.wait_words[pid] = status << 8
             # The pinned child's top-level allocation and thread exceptions exit 5.
             self.fault |= status == 5
+            self.replays.append({"ordinal": ordinal, "observationSha256": record.observation_digest.hex(),
+                                 "replayedClockReads": len(self.times), "childStatus": status,
+                                 "pipeBytes": len(child.pipe_data)})
         except Exception:
             self.wait_words[pid] = 6
             self.fault = True
@@ -257,12 +261,20 @@ class PartRunner:
             return Result(5, FAILED, b"")
         return self._run(argv, files, stages=1)
 
-    def _run(self, argv, files, *, stages):
+    def run_whole(self, argv, files, evidence=None):
+        """A whole call: the parent and its three serial stages, each child replayed in a fresh store."""
+        if len(argv) < 2 or argv[1] in (b"-key", b"-leaf", b"-plan"):
+            return Result(5, FAILED, b"")
+        return self._run(argv, files, stages=3, evidence=evidence)
+
+    def _run(self, argv, files, *, stages, evidence=None):
         if not _active.acquire(blocking=False):
             return Result(5, FAILED, b"")
         try:
             host = ProcessHost(self, argv, files, stages=stages)
             status = self.start(host)
+            if evidence is not None:
+                evidence.extend(host.replays)
             if host.fault or (status in (0, 3, 14) and (host.forks != stages or host.wait_words or host.pending)):
                 return Result(5, FAILED, b"")
             return Result(status, bytes(host.stdout), bytes(host.stderr))
