@@ -68,3 +68,13 @@ const noEnds: AcceptanceExpectations["completion"] = { kind: "complete" };
 // @ts-expect-error rules are a closed union
 const rule: AcceptanceRule = "trust-me";
 void [seven, noEnds, rule];
+
+import { createVerifier } from "../../../build/ts/host/browser.js";
+import type { BrowserVerifier, BrowserVerifierOptions } from "../../../build/ts/host/browser.js";
+
+const browserOptions: BrowserVerifierOptions = { moduleUrl: "/cp_verify.wasm", moduleSha256: "a".repeat(64) };
+const browserVerifier: BrowserVerifier = createVerifier(browserOptions);
+const browserPending: Promise<VerifyResult> = browserVerifier.verify(files, ["-plan", "id"], { deadlineMs: 1000 });
+void browserPending;
+// @ts-expect-error the trusted digest is required
+createVerifier({ moduleUrl: "/cp_verify.wasm" });

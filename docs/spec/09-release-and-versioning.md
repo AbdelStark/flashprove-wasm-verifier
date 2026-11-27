@@ -26,6 +26,7 @@ One PR changes the relevant locks, adds an ADR, updates the platform audit and r
 | Native reference | g++ 13 or later on x86_64 Linux, GNU coreutils/findutils | Upstream build contract. CI records exact compiler, libc and runner image. |
 | Node | Supported major pinned in `toolchain.lock` | CLI, test harness and server library |
 | TypeScript compiler | Exact dev dependency in the package lock when introduced | Strict API declarations. No verifier runtime dependency. |
+| Playwright (dev only) | Exact dev dependency `1.65.0` in the package lock, npm registry, lockfile integrity hash, Apache-2.0 | Drives the pinned Chromium build in browser integration tests. Not shipped. |
 | Browser engines, Deno, Bun and Bend verifier | Exact tested versions or revision in release evidence | Capability matrix and scoped comparisons |
 | Build utilities | Git, Make, curl, tar, Bash and Python 3 with standard library | Existing bootstrap and repository checks. Record versions for release jobs. |
 
