@@ -30,6 +30,8 @@ jobs:
         run: node conformance/verify-test.mjs
       - name: Check caller acceptance on the pinned examples
         run: node conformance/acceptance-test.mjs
+      - name: Verify published proofs in Chromium through the dedicated worker
+        run: npx playwright install --with-deps chromium && node conformance/browser-test.mjs
       - name: Retain redacted Node conformance evidence
         if: always()
         uses: actions/upload-artifact@v4

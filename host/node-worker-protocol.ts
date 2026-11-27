@@ -60,7 +60,8 @@ function consistent(status: number, bytes: Uint8Array, mode: string | undefined)
     && final !== plan && final !== "NOT-A-VERIFICATION";
 }
 
-export function readNodeReply(value: unknown, request: NodeWorkerRequest): GuestResult | undefined {
+/** Validate a worker's reply for one request. Shared by the Node and browser supervisors. */
+export function readNodeReply(value: unknown, request: Pick<NodeWorkerRequest, "requestId" | "argv">): GuestResult | undefined {
   if (!value || typeof value !== "object") return;
   const message = value as Partial<NodeWorkerReply>;
   if (message.schema !== 1 || message.requestId !== request.requestId || !message.result

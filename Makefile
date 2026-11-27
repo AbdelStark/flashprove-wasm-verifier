@@ -4,7 +4,7 @@ SEEDS ?= 1000
 FUZZ_JOBS ?= 1
 FUZZ_SHARD ?= 0/1
 
-.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test c7-test scoped-disk-test verify-test acceptance-test replay-transport-test replay-test memory-limit-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test c7-test scoped-disk-test verify-test acceptance-test browser-test replay-transport-test replay-test memory-limit-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -86,6 +86,10 @@ verify-test: build host-test ## compare verify(files, args) with native on publi
 
 acceptance-test: build host-test ## check caller acceptance on the pinned examples, one fact varied at a time
 	@node conformance/acceptance-test.mjs
+
+browser-test: build host-test ## verify published proofs in Chromium through the dedicated worker
+	@npx playwright install chromium
+	@node conformance/browser-test.mjs
 
 replay-transport-test: host-test ## test Node replay events, pipes and wait status
 	@scripts/bootstrap-wasmtime-python.sh
