@@ -19,3 +19,7 @@ The tests use actual Wasm calls for bounds, overflow, denied capabilities, and d
 ## Part calls
 
 `make conformance` compares the key and leaf parts from each published fixture with the pinned native executable. The host admits one synchronous call per process. It restores the observed prefix in a fresh store and releases the child store after termination. It passes child stdout and the encoded wait status to upstream's parent. A trap or replay mismatch returns exit 5 with `NOT CHECKED: internal-stage` and discards captured output. The [stage ABI](../../port/ABI.md) lists the supported imports.
+
+## Whole calls
+
+`make wasmtime-whole` runs the four published whole calls through `PartRunner.run_whole`: the parent and the three serial stages, each child replayed in a fresh store. It compares status, stdout and stderr with the pinned native verifier, using only the approved exclusions, and checks that the full-size call refuses with exit 5 and exactly `NOT CHECKED: internal-stage` when the stage cap is 8,192 pages. It requires the installed embedding to be the `toolchain.lock` version and records the SHA-256 of its native Wasmtime library. `build/conformance-wasmtime.json` keeps replay evidence apart from memory evidence. Replay evidence is each fork's observation digest, replayed clock reads, child status and pipe bytes. Memory evidence is the peak linear pages of the parent and each stage.

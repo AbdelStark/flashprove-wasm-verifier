@@ -86,10 +86,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make m1-conformance
+      - name: Run every published whole call in the Wasmtime host against native
+        run: make wasmtime-whole
       - name: Retain redacted M1 conformance evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: conformance-m1
-          path: build/conformance-m1.json
+          path: |
+            build/conformance-m1.json
+            build/conformance-wasmtime.json
           if-no-files-found: error
