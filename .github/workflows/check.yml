@@ -64,6 +64,18 @@ jobs:
             build/*.tgz
             build/package-inventory.json
           if-no-files-found: error
+  repro:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the module in two clean roots and compare bytes
+        run: make repro
+      - name: Retain the reproducibility record
+        uses: actions/upload-artifact@v4
+        with:
+          name: repro
+          path: build/repro.json
+          if-no-files-found: error
   native-c1:
     runs-on: ubuntu-24.04
     steps:
