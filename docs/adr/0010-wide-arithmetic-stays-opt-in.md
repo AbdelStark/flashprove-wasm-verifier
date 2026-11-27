@@ -16,7 +16,9 @@ Protocol: as in ADR 0009, on an Apple M4 Max with macOS, Wasmtime 51.0.0 through
 | Baseline | 24.59 (24.56 / 24.60 / 24.59) |
 | `-mwide-arithmetic` | 12.57 (12.59 / 12.57 / 12.56) |
 
-On `accepted-proof` the medians were 2.51 s and 1.90 s. These figures hold only for these builds, this machine and this runtime. The candidates workflow repeats the measurement on x86_64 Linux and runs the audit, C3, C4, the Wasmtime part calls and every published whole call against native on this build.
+On `accepted-proof` the medians were 2.51 s and 1.90 s. These figures hold only for these builds, this machine and this runtime.
+
+The candidates workflow repeated the protocol on a GitHub-hosted ubuntu-24.04 virtual machine (AMD EPYC 7763, 4 logical CPUs): 69.95 s for the baseline (69.57 / 70.62 / 69.95) against 30.78 s (30.78 / 30.78 / 30.47), 2.27 times faster, with outputs equal to the baseline. On that build the audit, C3, C4, the Wasmtime part calls and every published whole call in Wasmtime matched native.
 
 V8 in the pinned Node 24.22.1 has no wide-arithmetic support, not even behind a flag. The module does not compile there, so Node, Chromium and the library cannot run it. The pinned Wasmtime CLI and embedding run it.
 
@@ -24,4 +26,4 @@ V8 in the pinned Node 24.22.1 has no wide-arithmetic support, not even behind a 
 
 Do not promote. RFC-0009 needs full conformance, C5 and support on the product runtimes before a candidate replaces the baseline. C5 and the Node gates cannot run without V8 support. A browser or Node host given this module fails closed: compilation fails and the call ends in `integrity` or `abi`.
 
-Keep the build as an opt-in for embedders that run Wasmtime, where it halves the measured full-size call. Revisit when V8, SpiderMonkey and JavaScriptCore ship the proposal. Promotion then needs the full gates on each product runtime, and an ADR naming the runtime versions.
+Keep the build as an opt-in for embedders that run Wasmtime, where it cut the measured full-size call by about half on both machines. Revisit when V8, SpiderMonkey and JavaScriptCore ship the proposal. Promotion then needs the full gates on each product runtime, and an ADR naming the runtime versions.

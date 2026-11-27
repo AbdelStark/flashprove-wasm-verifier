@@ -49,8 +49,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Time the full-size call for baseline, SIMD and wide arithmetic on one runner
-        run: make candidates
+      - name: Time baseline, SIMD and wide arithmetic, and native -j scaling, on one runner
+        run: make reference candidates
       - uses: actions/upload-artifact@v4
         if: always()
         with:
