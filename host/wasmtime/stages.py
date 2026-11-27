@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+import os
 import struct
 from threading import Lock
 from time import monotonic_ns
@@ -226,6 +227,8 @@ class PartRunner:
         config.wasm_exceptions = True
         config.wasm_threads = False
         config.wasm_relaxed_simd = False
+        # The test host follows an opt-in candidate build; the baseline needs neither proposal.
+        config.wasm_wide_arithmetic = os.environ.get("WASM_CANDIDATE") == "wide"
         self.engine = wasmtime.Engine(config)
         self.module = wasmtime.Module.from_file(self.engine, module_path)
         self.clock = clock

@@ -1,6 +1,7 @@
 """Hash sorted repository paths and their SHA-256 values for port provenance."""
 
 from hashlib import sha256
+import os
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
@@ -20,6 +21,12 @@ for path in sorted(paths):
     name = path.relative_to(root).as_posix().encode("utf-8")
     value = sha256(path.read_bytes()).digest()
     for field in (name, value):
+        digest.update(len(field).to_bytes(4, "big"))
+        digest.update(field)
+# A candidate build has its own port digest, so its module can never pass for the baseline.
+candidate = os.environ.get("WASM_CANDIDATE", "")
+if candidate:
+    for field in (b"candidate", candidate.encode("utf-8")):
         digest.update(len(field).to_bytes(4, "big"))
         digest.update(field)
 print(digest.hexdigest())
