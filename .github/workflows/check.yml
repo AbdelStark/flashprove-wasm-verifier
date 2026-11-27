@@ -26,6 +26,8 @@ jobs:
       - run: make conformance test
       - name: Check scoped CLI reads and C7 native cases
         run: node conformance/cli-input-test.mjs
+      - name: Compare verify(files, args) with native
+        run: node conformance/verify-test.mjs
       - name: Retain redacted Node conformance evidence
         if: always()
         uses: actions/upload-artifact@v4

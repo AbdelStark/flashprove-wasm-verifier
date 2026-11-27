@@ -1,16 +1,20 @@
 import { failureCodes } from "./diagnostics.js";
 import type { Failure, InstanceDiagnostic } from "./diagnostics.js";
 import { BASELINE_LIMITS } from "./limits.js";
+import type { CapturedFile } from "./namespace.js";
 import type { GuestResult } from "./replay.js";
+
+/** Exactly one input source: scoped disk reads from a directory, or files copied before admission. */
+export type NodeWorkerInput =
+  | Readonly<{ argv: readonly string[]; workingDirectory: string; files?: undefined }>
+  | Readonly<{ argv: readonly string[]; files: readonly CapturedFile[]; workingDirectory?: undefined }>;
 
 export type NodeWorkerRequest = Readonly<{
   schema: 1;
   requestId: number;
   module: WebAssembly.Module;
-  argv: readonly string[];
-  workingDirectory: string;
   diagnostics?: true;
-}>;
+}> & NodeWorkerInput;
 
 export type NodeWorkerReply = Readonly<{
   schema: 1;
