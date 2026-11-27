@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build:host": "tsc --project tsconfig.json",
-    "test": "npm run build:host && node --test host/test/*.test.mjs"
+    "test": "npm run build:host && tsc --project host/test/consumer/tsconfig.json && node --test host/test/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.1",

@@ -6,8 +6,9 @@ import { buildDiagnostic, elapsedNs, readInstanceDiagnostics } from "./diagnosti
 import type { DiagnosticsSink, DiagnosticsV1 } from "./diagnostics.js";
 import { BASELINE_LIMITS } from "./limits.js";
 import { captureArguments, InputError } from "./namespace.js";
+import type { FileSnapshot } from "./namespace.js";
 import { readNodeReply } from "./node-worker-protocol.js";
-import type { NodeWorkerReply, NodeWorkerRequest } from "./node-worker-protocol.js";
+import type { NodeWorkerInput, NodeWorkerReply, NodeWorkerRequest } from "./node-worker-protocol.js";
 import { refusal } from "./replay.js";
 import type { Failure, GuestResult } from "./replay.js";
 
@@ -33,8 +34,26 @@ export class NodeSupervisor {
     this.#now = options.now ?? (() => performance.now());
   }
 
-  async run(module: WebAssembly.Module, args: readonly string[],
-            options: { deadlineMs?: number; workingDirectory?: string; diagnostics?: DiagnosticsSink } = {}): Promise<GuestResult> {
+  /** Run with scoped disk reads relative to `workingDirectory` (the CLI path). */
+  run(module: WebAssembly.Module, args: readonly string[],
+      options: { deadlineMs?: number; workingDirectory?: string; diagnostics?: DiagnosticsSink } = {}): Promise<GuestResult> {
+    return this.#run(module, options, () => ({
+      argv: captureArguments(args, "cp_verify"), workingDirectory: options.workingDirectory ?? cwd(),
+    }));
+  }
+
+  /** Run on files already copied by `captureCall`. Their buffers move to the worker and detach here. */
+  runFiles(module: WebAssembly.Module, snapshot: FileSnapshot,
+           options: { deadlineMs?: number; diagnostics?: DiagnosticsSink } = {}): Promise<GuestResult> {
+    return this.#run(module, options, () => {
+      if (snapshot.argv[0] !== "cp_verify") throw new InputError("invalid-input");
+      return { argv: snapshot.argv, files: snapshot.files };
+    }, snapshot.files.map(([, bytes]) => bytes.buffer));
+  }
+
+  async #run(module: WebAssembly.Module, options: { deadlineMs?: number; diagnostics?: DiagnosticsSink },
+             input: () => NodeWorkerInput,
+             transfer: ArrayBuffer[] = []): Promise<GuestResult> {
     const sink = options.diagnostics;
     const began = sink ? performance.now() : undefined;
     const report = (result: GuestResult, workerDiagnostics?: unknown): GuestResult => {
@@ -71,8 +90,7 @@ export class NodeSupervisor {
       deadline = start + deadlineMs;
       if (!(module instanceof WebAssembly.Module)) throw new InputError("invalid-input");
       request = {
-        schema: 1, requestId: ++this.#requestId, module,
-        argv: captureArguments(args, "cp_verify"), workingDirectory: options.workingDirectory ?? cwd(),
+        schema: 1, requestId: ++this.#requestId, module, ...input(),
         ...(sink ? { diagnostics: true } : {}),
       };
       if (this.#now() >= deadline) {
@@ -145,7 +163,7 @@ export class NodeSupervisor {
       onTimeout();
       if (!decided) {
         try {
-          worker.postMessage(request);
+          worker.postMessage(request, transfer);
         } catch {
           deliveryFailure();
         }

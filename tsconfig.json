@@ -1,12 +1,21 @@
 {
   "compilerOptions": {
     "target": "ES2024",
-    "lib": ["ES2024", "DOM"],
+    "lib": [
+      "ES2024",
+      "DOM"
+    ],
     "module": "NodeNext",
     "rootDir": ".",
     "outDir": "build/ts",
     "strict": true,
-    "noEmitOnError": true
+    "noEmitOnError": true,
+    "declaration": true
   },
-  "include": ["host/**/*.ts"]
+  "include": [
+    "host/**/*.ts"
+  ],
+  "exclude": [
+    "host/test/consumer"
+  ]
 }

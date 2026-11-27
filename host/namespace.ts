@@ -107,13 +107,17 @@ export function ownedFile(bytes: Uint8Array): InputFile {
   });
 }
 
+export type CapturedFile = readonly [path: string, bytes: Uint8Array<ArrayBuffer>];
+
 class SnapshotNamespace implements CallNamespace {
   readonly #root = makeDirectory();
+  readonly files: readonly CapturedFile[];
 
   constructor(files: ReadonlyMap<string, Uint8Array>) {
     let total = 0;
     let pathBytes = 0;
     let entries = 0;
+    const captured: CapturedFile[] = [];
     for (const [path, value] of files) {
       const parts = canonicalParts(path);
       pathBytes += encoder.encode(path).length;
@@ -133,7 +137,9 @@ class SnapshotNamespace implements CallNamespace {
       const bytes = copyFile(value, MAX_INPUT_BYTES - total);
       total += bytes.length;
       current.children.set(name, ownedFile(bytes));
+      captured.push(Object.freeze([path, bytes] as const));
     }
+    this.files = Object.freeze(captured);
   }
 
   lookup(path: string): Lookup {
@@ -163,6 +169,11 @@ export function captureArguments(args: readonly string[], executable?: string): 
   return Object.freeze(argv);
 }
 
-export function captureCall(files: ReadonlyMap<string, Uint8Array>, args: readonly string[]): CallSnapshot {
-  return Object.freeze({ argv: captureArguments(args), namespace: Object.freeze(new SnapshotNamespace(files)) });
+export type FileSnapshot = Readonly<{ argv: readonly string[]; namespace: CallNamespace; files: readonly CapturedFile[] }>;
+
+/** Copy the caller's map and arguments synchronously. The copies belong to the call alone. */
+export function captureCall(files: ReadonlyMap<string, Uint8Array>, args: readonly string[]): FileSnapshot {
+  const argv = captureArguments(args);
+  const namespace = Object.freeze(new SnapshotNamespace(files));
+  return Object.freeze({ argv, namespace, files: namespace.files });
 }
