@@ -4,7 +4,7 @@ SEEDS ?= 1000
 FUZZ_JOBS ?= 1
 FUZZ_SHARD ?= 0/1
 
-.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test c7-test scoped-disk-test verify-test acceptance-test browser-test demo demo-test package package-test replay-transport-test replay-test memory-limit-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test c7-test scoped-disk-test verify-test acceptance-test browser-test demo demo-test package package-test replay-transport-test replay-test memory-limit-test repro bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -114,6 +114,10 @@ replay-test: conformance replay-transport-test ## compare the Node calls and tes
 
 memory-limit-test: bootstrap replay-transport-test ## test resource faults and the process ABI in Wasm
 	@bash conformance/wasm-memory-test.sh
+
+repro: bootstrap upstream ## build the module in two clean roots from the committed tree and compare bytes (build/repro.json)
+	@python3 -B -m unittest scripts/compare_builds_test.py
+	@scripts/repro.sh
 
 bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
 	@scripts/not-yet.sh $@ M4
