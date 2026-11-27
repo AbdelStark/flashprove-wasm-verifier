@@ -158,20 +158,20 @@ def c_symbols(path, kind):
             if re.fullmatch(r"(?!_Z)[A-Za-z_]\w* [A-Za-z](?: [0-9a-f]+)*", line)}
 
 
-def candidate():
+def candidate(root=ROOT):
     """The reviewed extras of the opt-in candidate named by WASM_CANDIDATE, or None for the baseline."""
     name = os.environ.get("WASM_CANDIDATE", "")
     if not name:
         return None
-    reviewed = json.loads((ROOT / "port/candidates.json").read_text())
+    reviewed = json.loads((root / "port/candidates.json").read_text())
     if name not in reviewed:
         raise ValueError(f"unknown candidate {name}")
     return name, reviewed[name]
 
 
-def reviewed_inventory(chosen=None):
+def reviewed_inventory(chosen=None, baseline=BASELINE):
     """The reviewed baseline inventory, with only the changes the chosen candidate declares."""
-    reviewed = json.loads(BASELINE.read_text())
+    reviewed = json.loads(baseline.read_text())
     for key, change in (chosen[1].get("inventoryChanges", {}) if chosen else {}).items():
         removed, added = set(change.get("removed", [])), set(change.get("added", []))
         if not removed <= set(reviewed[key]):

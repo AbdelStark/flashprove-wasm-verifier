@@ -123,7 +123,10 @@ def m1(root, make):
                 module = build / "wasm/cp_verify.wasm"
                 report["moduleSha256"] = sha256(module.read_bytes()).hexdigest()
                 audit = read_json(module.with_name("audit-observed.json"))
-                if audit != read_json(root / "port/audit.json"):
+                # The reviewed inventory, with only the changes an opt-in candidate declares.
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+                from audit_wasm import candidate, reviewed_inventory
+                if audit != reviewed_inventory(candidate(root), root / "port/audit.json"):
                     raise ValueError("unreviewed audit evidence")
                 report["counts"]["audit"] = {
                     "dependencies": len(audit["dependencies"]), "typedImports": len(audit["imports"]),
