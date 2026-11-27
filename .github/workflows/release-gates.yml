@@ -1,0 +1,110 @@
+name: Release gates
+# Every gate a release needs, for one commit, with read-only privileges (RFC-0010).
+# The evidence job fails unless all of them passed and agree on pins and module bytes.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  # A change to the gate itself proves it on its own pull request.
+  pull_request:
+    paths:
+      - .github/workflows/release-gates.yml
+      - conformance/release_gate.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-gates-${{ github.sha }}
+jobs:
+  conformance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: C1, C2, C6 against native, with the M1 C3 and C4 gates
+        run: make conformance
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-conformance-node
+          path: build/conformance-node.json
+          if-no-files-found: error
+  c7:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: C7 host failure boundaries with native comparisons
+        run: make c7-test
+      - name: Record the C7 result for this commit
+        run: printf '{"status": "passed", "commit": "%s"}\n' "$GITHUB_SHA" > build/c7.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-c7
+          path: build/c7.json
+          if-no-files-found: error
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: C5 shard ${{ matrix.shard }} of 4, 1,000 seeds in all
+        run: make fuzz SEEDS=1000 FUZZ_JOBS=4 FUZZ_SHARD=${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gate-fuzz-${{ matrix.shard }}
+          path: build/fuzz/seeds-1000-${{ matrix.shard }}-of-4.json
+          if-no-files-found: error
+  repro:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the module in two clean roots and compare bytes
+        run: make repro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-repro
+          path: build/repro.json
+          if-no-files-found: error
+  evidence:
+    needs: [conformance, c7, fuzz, repro]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gate-*
+          path: build/release/artifacts
+          merge-multiple: true
+      - name: Merge the C5 shards
+        # A failed merge leaves fuzz.json absent, which the gate below reports.
+        continue-on-error: true
+        run: python3 -B -m conformance.fuzz merge --seeds 1000 --output build/release/fuzz.json build/release/artifacts/seeds-1000-*-of-4.json
+      - name: Require every gate for this commit
+        run: |
+          for name in conformance-node c7 repro; do
+            if [ -f "build/release/artifacts/$name.json" ]; then cp "build/release/artifacts/$name.json" build/release/; fi
+          done
+          python3 -B -m conformance.release_gate build/release "$GITHUB_SHA" build/release/release-evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-evidence
+          path: build/release/*.json
+          retention-days: 90
+          if-no-files-found: error
