@@ -63,31 +63,36 @@ fixture=.upstream/FlashProve/examples/accepted-proof
 
 The call returns exit 0 and ends in `YES`. The CLI uses the same arguments and output streams as `cp_verify`. [CLI contract](docs/spec/02-public-api.md#cli)
 
-## Planned browser API
+## Use the library
+
+In Node, `verify(files, args)` runs the call on an in-memory map in a fresh worker. In a browser, `createVerifier` checks the module against the SHA-256 you trust before compiling it, and runs each call in a dedicated worker.
 
 ```ts
-// M3: in a browser, inside a Web Worker
-import { verify, checkAcceptance } from "flashprove-wasm-verifier";
+import { verify, checkAcceptance } from "flashprove-wasm-verifier";            // Node
+// import { createVerifier, checkAcceptance } from "flashprove-wasm-verifier/browser";
+// const { verify } = createVerifier({ moduleUrl, moduleSha256 });              // browser
 
 const result = await verify(files, [
-  "/config", "/ivk", "/request", "/token", "/proof", "-id", trustedId,
+  "config", "ivk", "example.req", "example.y", "example.proof", "-id", trustedId,
 ]);
 result.verdict;   // "YES"
 result.resultV1;  // { status: "0", claim: "exact-match", id: "...", bits: "128", ... }
 
 // A YES is not acceptance. This applies upstream's acceptance rule, point by point,
 // to facts only you have: the ID from a source you trust, your tokens, your policy.
-const decision = checkAcceptance(result, expected); // independent caller expectations
+const decision = checkAcceptance(result, expected); // { accepted: true } or the failed rules
 ```
+
+`files` maps canonical absolute paths such as `/config/policy.txt` to bytes. Relative arguments resolve from `/`. [Host and library](host/README.md) · [Offline demo](demo/README.md)
 
 ## Roadmap
 
 | | Milestone | Done when |
 |---|---|---|
-| ☐ | **M0** Ground | pins fetched and verified (done); native reference built and run in CI |
-| ☐ | **M1** One stage | port audit as a test, field and hash known answers, tables equal, `-key` and `-leaf` part-calls pass in Wasmtime |
-| ☐ | **M2** Whole call | fork by replay, `fpv` on Node, published and altered proofs match the native verdicts, 1,000 fuzz seeds clean |
-| ☐ | **M3** Browser | TypeScript package, Web Worker, `checkAcceptance`, an offline demo page |
+| ☑ | **M0** Ground | pins fetched and verified; native reference built and run in CI |
+| ☑ | **M1** One stage | port audit as a test, field and hash known answers, tables equal, `-key` and `-leaf` part-calls pass in Wasmtime |
+| ☑ | **M2** Whole call | fork by replay, `fpv` on Node, published and altered proofs match the native verdicts, 1,000 fuzz seeds clean |
+| ☑ | **M3** Browser | TypeScript package, Web Worker, `checkAcceptance`, an offline demo page |
 | ☐ | **M4** Speed | evaluate threads, SIMD and wide multiplication; measure whole calls against native and Bend |
 | ☐ | **M5** Release | reproducible builds, fuzzing in CI, signed releases with published hashes |
 
