@@ -16,6 +16,8 @@ A deterministic rebuild uses different absolute clean roots and the same pinned 
 
 One PR changes the relevant locks, adds an ADR, updates the platform audit and runs the full conformance and fuzz gates. Recompute native output only through the new pinned oracle and explain observable differences against the prior pin. Exercise this workflow in M5 in an isolated rehearsal before release. A pin need not move in the v1 tag if the rehearsal finds incompatibilities.
 
+`make rehearse-pin COMMIT=<sha>` moves `upstream.lock` in a separate worktree, refetches and checks the candidate, rebuilds and audits the module, and writes `build/rehearsal-<short>.json`. That record holds the source digest at both pins, the candidate module hash, every changed upstream path and the changed paths that the build or the fixtures read. The full gates then run in CI on a branch that carries only the lock change: the check workflow on its pull request and a dispatched 1,000-seed C5 run. An ADR records the result and whether the pin moves. [Rehearsal of 7f074de](../adr/0012-pin-rehearsal-7f074de.md)
+
 ## Dependency policy
 
 | Dependency | Constraint | Reason |
