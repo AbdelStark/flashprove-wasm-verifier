@@ -1,0 +1,27 @@
+{
+  "simd": {
+    "compileFlags": [
+      "-msimd128"
+    ],
+    "wasmtimeFeatures": [
+      "simd=y"
+    ],
+    "note": "Portable 128-bit integer and float SIMD by auto-vectorization. Relaxed SIMD stays off."
+  },
+  "wide": {
+    "compileFlags": [
+      "-mwide-arithmetic"
+    ],
+    "wasmtimeFeatures": [
+      "wide-arithmetic=y"
+    ],
+    "note": "The wide-arithmetic proposal: 64-by-64 products as i64.mul_wide_u instead of compiler-rt __multi3.",
+    "inventoryChanges": {
+      "direct_c_symbols": {
+        "removed": [
+          "__multi3"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+name: Candidates
+# RFC-0009: each opt-in build passes the gates its runtimes can run, and is timed against the
+# baseline on the same runner. The report decides nothing; a disposition needs an ADR.
+on:
+  pull_request:
+    paths:
+      - conformance/candidates.py
+      - port/candidates.json
+      - .github/workflows/candidates.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [simd, wide]
+    env:
+      WASM_CANDIDATE: ${{ matrix.candidate }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Audit, C3, C4 and Wasmtime part calls on the candidate
+        run: make m1-conformance
+      - name: Every published whole call in Wasmtime against native
+        run: make wasmtime-whole
+      - name: Node C1, C2 and C6 against native (V8 cannot run wide arithmetic)
+        if: matrix.candidate == 'simd'
+        run: make conformance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-${{ matrix.candidate }}
+          path: |
+            build/conformance-m1.json
+            build/conformance-wasmtime.json
+            build/conformance-node.json
+          if-no-files-found: warn
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Time baseline, SIMD and wide arithmetic, and native -j scaling, on one runner
+        run: make reference candidates
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-measurements
+          path: build/candidates/report-*.json
+          if-no-files-found: error

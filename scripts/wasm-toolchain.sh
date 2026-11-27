@@ -11,6 +11,13 @@ wasm_flags=(-std=c++17 -O2 -fexceptions -fwasm-exceptions -mllvm -wasm-use-legac
   -DBLK_FIELD=2 -DBLK_COUNT_HASH_CALLS=1 -DSERVING_BUILD=1 -DDIGEST_WORDS=8
   "-ffile-prefix-map=$ROOT=." "-I$ROOT/port/include"
   "-I$upstream/blocks" "-I$upstream/prover")
+# An opt-in candidate adds only its reviewed flags (port/candidates.json). Empty is the baseline.
+case "${WASM_CANDIDATE:-}" in
+  "") ;;
+  simd) wasm_flags+=(-msimd128) ;;
+  wide) wasm_flags+=(-mwide-arithmetic) ;;
+  *) echo "wasm build: unknown WASM_CANDIDATE '${WASM_CANDIDATE}'" >&2; exit 2 ;;
+esac
 wasm_link=(-Wl,-z,stack-size=1048576 -lunwind)
 wasm_memory_link=(-Wl,--max-memory=3758096384,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=aligned_alloc)
 

@@ -2,6 +2,7 @@
 
 from io import BytesIO
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -157,9 +158,41 @@ def c_symbols(path, kind):
             if re.fullmatch(r"(?!_Z)[A-Za-z_]\w* [A-Za-z](?: [0-9a-f]+)*", line)}
 
 
-def validate_instructions(module, output):
+def candidate(root=ROOT):
+    """The reviewed extras of the opt-in candidate named by WASM_CANDIDATE, or None for the baseline."""
+    name = os.environ.get("WASM_CANDIDATE", "")
+    if not name:
+        return None
+    reviewed = json.loads((root / "port/candidates.json").read_text())
+    if name not in reviewed:
+        raise ValueError(f"unknown candidate {name}")
+    return name, reviewed[name]
+
+
+def reviewed_inventory(chosen=None, baseline=BASELINE):
+    """The reviewed baseline inventory, with only the changes the chosen candidate declares."""
+    reviewed = json.loads(baseline.read_text())
+    for key, change in (chosen[1].get("inventoryChanges", {}) if chosen else {}).items():
+        removed, added = set(change.get("removed", [])), set(change.get("added", []))
+        if not removed <= set(reviewed[key]):
+            raise ValueError(f"candidate removes {key} entries the baseline lacks")
+        reviewed[key] = sorted((set(reviewed[key]) - removed) | added)
+    return reviewed
+
+
+def without_candidate_flags(flags, extras):
+    """Each reviewed candidate flag must appear exactly once; the rest must match the baseline."""
+    for flag in extras:
+        if flags.count(flag) != 1:
+            raise ValueError(f"candidate flag {flag} must appear exactly once")
+    return [flag for flag in flags if flag not in extras]
+
+
+def validate_instructions(module, output, features=()):
+    # Relaxed SIMD and threads stay off for every build; a candidate enables only its own feature.
+    extra = [arg for feature in features for arg in ("-W", feature)]
     subprocess.run(
-        [ROOT / ".toolchain/wasmtime/wasmtime", "compile", "-W", "relaxed-simd=n", "-W", "threads=n",
+        [ROOT / ".toolchain/wasmtime/wasmtime", "compile", "-W", "relaxed-simd=n", "-W", "threads=n", *extra,
          "-O", "opt-level=0", "-o", output, module],
         check=True, capture_output=True, text=True,
     )
@@ -216,11 +249,13 @@ def main():
     work = Path(path).resolve()
     module = work / "cp_verify.wasm"
     observed = {"link_flags": link}
+    chosen = candidate()
     dependencies = set()
     direct = set()
     for unit in ("cp_verify", "baseline", "process", "memory"):
         dependencies.update(dependency_paths(work / f"{unit}.d", work / "verifier/src", work))
-        observed[f"{unit}_flags"] = driver_flags(work / f"{unit}.command.json", work, digest)
+        flags = driver_flags(work / f"{unit}.command.json", work, digest)
+        observed[f"{unit}_flags"] = without_candidate_flags(flags, chosen[1]["compileFlags"]) if chosen else flags
         direct.update(c_symbols(work / f"{unit}.o", "undefined"))
     linked = c_symbols(module, "defined")
     if {"madvise", "posix_madvise"} & (direct | linked):
@@ -229,15 +264,17 @@ def main():
                     linked_c_symbols=sorted(linked), imports=imports(module), memory_limits=memory_limits(module),
                     memory_growth=growth_sites(module))
     Path(report).write_text(json.dumps(observed, indent=2) + "\n")
-    reviewed = json.loads(BASELINE.read_text())
+    reviewed = reviewed_inventory(chosen)
     documented = check_abi_documentation(reviewed)
     check_inventory(observed, reviewed)
     check_provenance(module, digest, port, work / "linked.wasm")
-    validate_instructions(module, work / "audit.cwasm")
+    validate_instructions(module, work / "audit.cwasm", chosen[1]["wasmtimeFeatures"] if chosen else ())
     print(f"wasm audit: {len(dependencies)} dependencies, {len(direct | linked)} C symbols, "
           f"{len(observed['imports'])} typed imports")
     print(f"ABI v1: {documented} documented tuples match the linked module")
     print("wasm audit: provenance matches both build digests and preserves non-custom sections")
+    if chosen:
+        print(f"wasm audit: candidate {chosen[0]} adds only {' '.join(chosen[1]['compileFlags'])}")
 
 
 if __name__ == "__main__":
