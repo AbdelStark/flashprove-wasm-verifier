@@ -93,7 +93,7 @@ const decision = checkAcceptance(result, expected); // { accepted: true } or the
 | ☑ | **M1** One stage | port audit as a test, field and hash known answers, tables equal, `-key` and `-leaf` part-calls pass in Wasmtime |
 | ☑ | **M2** Whole call | fork by replay, `fpv` on Node, published and altered proofs match the native verdicts, 1,000 fuzz seeds clean |
 | ☑ | **M3** Browser | TypeScript package, Web Worker, `checkAcceptance`, an offline demo page |
-| ☐ | **M4** Speed | evaluate threads, SIMD and wide multiplication; measure whole calls against native and Bend |
+| ☑ | **M4** Speed | evaluate threads, SIMD and wide multiplication; measure whole calls against native and Bend |
 | ☐ | **M5** Release | reproducible builds, fuzzing in CI, signed releases with published hashes |
 
 No speed numbers until M4, and then only with their protocol: runtime, CPU, fixture, runs, statistic.
