@@ -42,7 +42,8 @@ jobs:
       - name: C7 host failure boundaries with native comparisons
         run: make c7-test
       - name: Record the C7 result for this commit
-        run: printf '{"status": "passed", "commit": "%s"}\n' "$GITHUB_SHA" > build/c7.json
+        run: |
+          printf '{"status": "passed", "commit": "%s"}\n' "$GITHUB_SHA" > build/c7.json
       - uses: actions/upload-artifact@v4
         with:
           name: gate-c7
