@@ -27,6 +27,7 @@ One PR changes the relevant locks, adds an ADR, updates the platform audit and r
 | Node | Supported major pinned in `toolchain.lock` | CLI, test harness and server library |
 | TypeScript compiler | Exact dev dependency in the package lock when introduced | Strict API declarations. No verifier runtime dependency. |
 | Playwright (dev only) | Exact dev dependency `1.65.0` in the package lock, npm registry, lockfile integrity hash, Apache-2.0 | Drives the pinned Chromium build in browser integration tests. Not shipped. |
+| esbuild (dev only) | Exact dev dependency `0.28.2` in the package lock, npm registry, lockfile integrity hash, MIT | Bundles the demo script and worker into single files so the demo runs offline. Its output ships in the demo bundle; esbuild does not. |
 | Browser engines, Deno, Bun and Bend verifier | Exact tested versions or revision in release evidence | Capability matrix and scoped comparisons |
 | Build utilities | Git, Make, curl, tar, Bash and Python 3 with standard library | Existing bootstrap and repository checks. Record versions for release jobs. |
 

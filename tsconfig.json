@@ -13,7 +13,8 @@
     "declaration": true
   },
   "include": [
-    "host/**/*.ts"
+    "host/**/*.ts",
+    "demo/**/*.ts"
   ],
   "exclude": [
     "host/test/consumer"
