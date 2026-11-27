@@ -16,7 +16,8 @@ upstream: ## fetch FlashProve at the pinned commit into .upstream/, examples has
 	@scripts/fetch-upstream.sh
 
 check: ## repository checks: locks, links, requirement IDs, prose
-	@python3 -B scripts/check-docs.py
+	@python3 -B scripts/check_docs.py
+	@python3 -B -m unittest scripts/check_docs_test.py
 
 reference: upstream ## build the native cp_verify with upstream's build.sh (x86_64 Linux, g++ 13+)
 	@scripts/build-reference.sh
