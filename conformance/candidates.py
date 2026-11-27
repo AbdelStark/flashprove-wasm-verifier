@@ -81,11 +81,11 @@ def once(module_dir, fixture):
     return result.status
 
 
-def measure(command, env):
+def measure(command, env, cwd=ROOT):
     runs = []
     for _ in range(4):
         began = monotonic_ns()
-        process = subprocess.run(command, cwd=ROOT, capture_output=True, env=env)
+        process = subprocess.run(command, cwd=cwd, capture_output=True, env=env)
         runs.append((monotonic_ns() - began, process.returncode, process.stdout))
     samples = [ns for ns, _, _ in runs[1:]]
     return {"warmupCount": 1, "samplesNs": samples, "medianNs": int(median(samples)),
@@ -140,6 +140,23 @@ def main(argv=None):
                   f"samples {[round(ns / 1e9, 2) for ns in row['samplesNs']]} exit {row['exitCodes']} {row['verdict']!r} "
                   f"equal={row['outputEqualsBaseline']}", flush=True)
         report["builds"][name] = entry
+    # The ceiling for a threaded candidate: the native reference's own -j scaling on this machine (ADR 0011).
+    native = BUILD / "native/cp_verify"
+    if native.exists():
+        sys.path.insert(0, str(ROOT))
+        from conformance.memory import invocation
+        call, _ = invocation(args.fixture)
+        if call[-2:] != ["-j", "1"]:
+            raise ValueError("expected the published call to end with -j 1")
+        call = call[:-2]
+        report["nativeThreads"] = {}
+        for threads in sorted({1, 2, 4, os.cpu_count() or 1}):
+            row = measure([str(native), *call, "-j", str(threads)], {**os.environ, "LC_ALL": "C"},
+                          cwd=ROOT / ".upstream/FlashProve")
+            row.pop("outputs")
+            report["nativeThreads"][str(threads)] = row
+            print(f"candidates: native -j {threads:<3} median {row['medianNs'] / 1e9:6.2f} s "
+                  f"samples {[round(ns / 1e9, 2) for ns in row['samplesNs']]} exit {row['exitCodes']}", flush=True)
     report["problems"] = problems
     (OUT / f"report-{args.fixture}.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(f"candidates: {'all outputs equal the baseline' if not problems else 'FAILED: ' + '; '.join(problems)}")
