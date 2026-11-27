@@ -129,21 +129,16 @@ repro: bootstrap upstream ## build the module in two clean roots from the commit
 	@python3 -B -m unittest scripts/compare_builds_test.py
 	@scripts/repro.sh
 
-<<<<<<< HEAD
 rehearse-pin: bootstrap upstream ## rehearse moving upstream.lock to COMMIT in an isolated worktree (build/rehearsal-*.json)
 	@scripts/rehearse-pin.sh "$(COMMIT)"
 
-bench: ## performance protocol R-PERF on the full-size fixtures  [M4]
-	@scripts/not-yet.sh $@ M4
-=======
 bench: build reference cli ## measure full-size whole calls: native, Bend, Wasmtime, Node, Chromium, Firefox, WebKit (BenchmarkV1)
 	@scripts/bootstrap-wasmtime-python.sh
 	@npx playwright install chromium firefox webkit
 	@.toolchain/wasmtime-python/bin/python -B -m conformance.bench run
 
-bench-test: ## check that the benchmark gate rejects incomplete or incomparable reports
+bench-test: upstream ## check that the benchmark gate rejects incomplete or incomparable reports
 	@python3 -B -m unittest conformance.bench_test
->>>>>>> c00dc75 (Measure full-size whole calls across seven runtimes as BenchmarkV1 (R-PERF-1, R-PERF-2))
 
 clean: ## remove build outputs (keeps .upstream and .toolchain)
 	rm -rf build
