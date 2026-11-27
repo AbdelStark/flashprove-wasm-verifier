@@ -169,6 +169,17 @@ def candidate():
     return name, reviewed[name]
 
 
+def reviewed_inventory(chosen=None):
+    """The reviewed baseline inventory, with only the changes the chosen candidate declares."""
+    reviewed = json.loads(BASELINE.read_text())
+    for key, change in (chosen[1].get("inventoryChanges", {}) if chosen else {}).items():
+        removed, added = set(change.get("removed", [])), set(change.get("added", []))
+        if not removed <= set(reviewed[key]):
+            raise ValueError(f"candidate removes {key} entries the baseline lacks")
+        reviewed[key] = sorted((set(reviewed[key]) - removed) | added)
+    return reviewed
+
+
 def without_candidate_flags(flags, extras):
     """Each reviewed candidate flag must appear exactly once; the rest must match the baseline."""
     for flag in extras:
@@ -253,15 +264,8 @@ def main():
                     linked_c_symbols=sorted(linked), imports=imports(module), memory_limits=memory_limits(module),
                     memory_growth=growth_sites(module))
     Path(report).write_text(json.dumps(observed, indent=2) + "\n")
-    reviewed = json.loads(BASELINE.read_text())
+    reviewed = reviewed_inventory(chosen)
     documented = check_abi_documentation(reviewed)
-    if chosen:
-        # A candidate may change only the inventory entries it declares, and must change them.
-        for key, change in chosen[1].get("inventoryChanges", {}).items():
-            removed, added = set(change.get("removed", [])), set(change.get("added", []))
-            if not removed <= set(reviewed[key]):
-                raise ValueError(f"candidate removes {key} entries the baseline lacks")
-            reviewed[key] = sorted((set(reviewed[key]) - removed) | added)
     check_inventory(observed, reviewed)
     check_provenance(module, digest, port, work / "linked.wasm")
     validate_instructions(module, work / "audit.cwasm", chosen[1]["wasmtimeFeatures"] if chosen else ())

@@ -26,7 +26,7 @@ def main():
     reviewed = json.loads(audit.BASELINE.read_text())
     build = audit.ROOT / "build"
     actual = json.loads((build / "wasm/audit-observed.json").read_text())
-    audit.check_inventory(actual, reviewed)
+    audit.check_inventory(actual, audit.reviewed_inventory(audit.candidate()))
     digest = (build / "wasm/source.sha256").read_text().strip()
     port = (build / "wasm/port.sha256").read_text().strip()
     wasm = build / "wasm/cp_verify.wasm"
