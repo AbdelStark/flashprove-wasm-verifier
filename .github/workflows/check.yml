@@ -41,6 +41,29 @@ jobs:
           name: conformance-node
           path: build/conformance-node.json
           if-no-files-found: error
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Pack the archive and smoke-test Node, Deno and Bun
+        run: make package && REQUIRE_RUNTIMES=1 node conformance/package-test.mjs
+      - name: Retain the archive and inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: |
+            build/*.tgz
+            build/package-inventory.json
+          if-no-files-found: error
   native-c1:
     runs-on: ubuntu-24.04
     steps:
