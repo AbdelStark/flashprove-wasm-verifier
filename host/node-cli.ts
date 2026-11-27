@@ -23,7 +23,7 @@ function write(stream: Writable, bytes: Uint8Array): Promise<boolean> {
 }
 
 export async function runCli(args: readonly string[], stdout: Writable, stderr: Writable): Promise<number> {
-  const module = await loadGuest();
+  const module = (await loadGuest())?.module;
   let result: GuestResult;
   try {
     result = module ? await new NodeSupervisor().run(module, args) : refusal("integrity");

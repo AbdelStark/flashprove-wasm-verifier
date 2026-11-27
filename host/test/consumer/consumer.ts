@@ -36,3 +36,35 @@ void verify(new Map([["/a", "text"]]), []);
 void verify(files, [1]);
 // @ts-expect-error unknown options are rejected
 void verify(files, [], { deadline: 1 });
+
+import { checkAcceptance } from "../../../build/ts/host/verify.js";
+import type { AcceptanceDecision, AcceptanceExpectations, AcceptanceRule } from "../../../build/ts/host/verify.js";
+
+const expectations: AcceptanceExpectations = {
+  verifier: { moduleSha256: "a".repeat(64), build: "b".repeat(64) },
+  files: { request: new Uint8Array(264), token: new Uint8Array(4) },
+  id: "c".repeat(64),
+  coverage: { r: 60, e: 64, T: 64, requireY: true },
+  policy: { kind: "clipped-gap", C: "9244130", theta: "323343", cap: "1", s: "16", sh: "8" },
+  allowProofOfWork: false,
+  acceptTheoremOnCodes: true,
+  completion: { kind: "complete", endTokenIds: [2] },
+};
+
+async function decide(): Promise<readonly AcceptanceRule[]> {
+  const decision: AcceptanceDecision = checkAcceptance(await pending, expectations);
+  if (decision.accepted) {
+    // @ts-expect-error an accepted decision has no failures
+    return decision.failed;
+  }
+  return decision.failed;
+}
+void decide;
+
+// @ts-expect-error sh is pinned to "8"
+const seven: AcceptanceExpectations["policy"] = { kind: "clipped-gap", C: "1", theta: "1", cap: "0", s: "1", sh: "7" };
+// @ts-expect-error a complete reply names its end tokens
+const noEnds: AcceptanceExpectations["completion"] = { kind: "complete" };
+// @ts-expect-error rules are a closed union
+const rule: AcceptanceRule = "trust-me";
+void [seven, noEnds, rule];
