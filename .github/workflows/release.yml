@@ -28,6 +28,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
       - name: Version and OpenSSL
         run: |
           if [ "$DRY_RUN" = true ]; then version='${{ inputs.version }}'; else version="${GITHUB_REF_NAME#v}"; fi
@@ -45,7 +51,7 @@ jobs:
       - name: Install the archive and verify the demo offline
         run: |
           npx playwright install --with-deps chromium
-          node conformance/package-test.mjs
+          REQUIRE_RUNTIMES=1 node conformance/package-test.mjs
           node conformance/demo-test.mjs
       - name: Stage the release
         run: python3 -B scripts/release.py stage --version "$VERSION" --out build/release-stage
