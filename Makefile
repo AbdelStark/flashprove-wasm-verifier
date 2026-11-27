@@ -4,7 +4,7 @@ SEEDS ?= 1000
 FUZZ_JOBS ?= 1
 FUZZ_SHARD ?= 0/1
 
-.PHONY: help bootstrap upstream check reference native-c1 build cli host-build wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
+.PHONY: help bootstrap upstream check reference native-c1 build cli host-build host-test wasm-build-test wasm-audit-test wasm-io-test comparator-test m1-gate-test m1-prerequisites m1-conformance node-gate-test conformance memory-probe fuzz fuzz-test test c7-test scoped-disk-test replay-transport-test replay-test memory-limit-test bench clean
 
 help: ## list targets
 	@awk 'BEGIN{FS=":.*## "} /^[a-z0-9-]+:.*## /{printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -70,14 +70,18 @@ fuzz: ## run C5 against pinned native with SEEDS, FUZZ_JOBS and FUZZ_SHARD
 fuzz-test: ## check deterministic seed mapping, shard merge and mismatch replay
 	@python3 -B -m unittest conformance.fuzz_test
 
-test: ## type-check the TypeScript host and run its contract tests
+host-test:
 	@npm ci --ignore-scripts --no-audit --no-fund
 	@npm test
 
-scoped-disk-test: build reference test ## compare native and guest scoped input reads on Linux
+test: memory-limit-test ## type-check and run host contracts and C7 resource faults
+
+c7-test: test scoped-disk-test ## run the full C7 suite with native comparisons on x86_64 Linux
+
+scoped-disk-test: build reference host-test ## compare native and guest scoped input reads on Linux
 	@node conformance/cli-input-test.mjs
 
-replay-transport-test: test ## test Node replay events, pipes and wait status
+replay-transport-test: host-test ## test Node replay events, pipes and wait status
 	@scripts/bootstrap-wasmtime-python.sh
 	@.toolchain/wasmtime-python/bin/python -B -c 'from pathlib import Path; import wasmtime; Path("build/node-replay-test.wasm").write_bytes(wasmtime.wat2wasm(Path("conformance/node-replay.wat").read_text()))'
 	@node --test conformance/node-replay-test.mjs

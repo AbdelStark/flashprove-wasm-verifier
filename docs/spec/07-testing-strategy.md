@@ -12,7 +12,7 @@
 | C6 arguments | Missing or malformed ID, wrong policy, work and next-token flags, bits boundaries, option order, `-j` boundaries, positional paths | Exit and terminal output from unmodified native call |
 | C7 limits | Oversize file, aggregate overflow, truncation within limit, memory failure, output exhaustion, timeout, trap, mixed rejection and host fault | Native normal parsing for in-envelope tests. Assert host refusal contract for injected failures. |
 
-Run C3 and C4 before planning and whole-call parity. Test stage memory in M1 with representative call contexts, including the request stage in its upstream whole-call context. A M1 runner may select Wasmtime part-calls while M2 brings up the product runner. The final `make conformance` runs C1 to C4 and C6. `make fuzz SEEDS=N` runs C5. `make test` includes C7 and contract tests.
+Run C3 and C4 before planning and whole-call parity. Test stage memory in M1 with representative call contexts, including the request stage in its upstream whole-call context. A M1 runner may select Wasmtime part-calls while M2 brings up the product runner. The final `make conformance` runs C1 to C4 and C6. `make fuzz SEEDS=N` runs C5. `make test` includes the host contract and C7 fault tests. `make c7-test` adds the native CLI cases on x86_64 Linux.
 
 ## Merge gates
 

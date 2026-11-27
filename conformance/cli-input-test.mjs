@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { BASELINE_LIMITS } from "../build/ts/host/limits.js";
 import { NodeSupervisor } from "../build/ts/host/node-supervisor.js";
 
 const native = resolve("build/native/cp_verify");
@@ -99,6 +100,23 @@ try {
   await checkBrokenSink([...common, "example.proof", "-id", id, "-j", "1", "-q"], dir, "stdout");
   await checkBrokenSink([], dir, "stderr");
   checkModuleIntegrity(scratch);
+  const truncated = readFileSync(join(dir, "example.proof")).subarray(0, -1);
+  writeFileSync(join(dir, "truncated.proof"), truncated);
+  await check("C7 proof truncated within the file cap", [...common, "truncated.proof", "-id", id, "-q"],
+    dir, 1, "NO: proof-refused");
+
+  const sparse = join(dir, "sparse.key");
+  const keyCall = ["-key", "config", "sparse.key", "-q"];
+  writeFileSync(sparse, Buffer.alloc(0));
+  truncateSync(sparse, BASELINE_LIMITS.fileBytes);
+  await check("C7 key at the file cap", keyCall, dir, 1, "NO: cp-key-head");
+  truncateSync(sparse, BASELINE_LIMITS.fileBytes + 1);
+  const oversized = spawnSync(cli, keyCall, { cwd: dir });
+  if (oversized.error) throw oversized.error;
+  assert.equal(oversized.status, 5);
+  assert.ok(oversized.stdout.equals(Buffer.from("NOT CHECKED: internal-stage\n")));
+  assert.equal(oversized.stderr.length, 0);
+  console.log("fpv CLI: C7 key one byte above the file cap returned exit 5");
   await check("invalid option precedes missing inputs", ["missing-config", ...common.slice(1), "missing.proof", "-bad"], dir, 2);
   await check("missing request plan option value", ["-plan", "request", "missing-policy", "missing-kl", "128", "-layout"],
     dir, 2);

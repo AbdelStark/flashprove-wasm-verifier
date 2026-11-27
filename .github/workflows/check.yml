@@ -23,8 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: make conformance memory-limit-test
-      - name: Check scoped CLI reads
+      - run: make conformance test
+      - name: Check scoped CLI reads and C7 native cases
         run: node conformance/cli-input-test.mjs
       - name: Retain redacted Node conformance evidence
         if: always()

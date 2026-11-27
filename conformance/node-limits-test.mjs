@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { BASELINE_LIMITS, PAGE_BYTES } from "../build/ts/host/limits.js";
 import { captureCall, ownedFile } from "../build/ts/host/namespace.js";
@@ -104,6 +105,31 @@ test("the per-file and aggregate input caps admit equality and reject one extra 
   expectFailure(runNodeGuest(probe, exact), "input-limit");
   expectFailure(runNodeGuest(probe, () => captureCall(new Map([["/a", new Uint8Array(file.length + 1)]]),
     ["cp_verify", "-plan", "zero"])), "input-limit");
+});
+
+test("scoped disk admission crosses the aggregate limit on the next open", {
+  skip: process.platform !== "linux" || !["x64", "arm64"].includes(process.arch),
+}, async () => {
+  const dir = mkdtempSync(resolve("build/c7-disk-"));
+  try {
+    for (const name of ["first", "second", "extra"]) writeFileSync(join(dir, name), Uint8Array.of(1));
+    for (const name of ["first", "second"]) truncateSync(join(dir, name), BASELINE_LIMITS.fileBytes);
+    const supervisor = new NodeSupervisor();
+    const args = ["-plan", "request", "first", "second", "128"];
+    const options = { workingDirectory: dir };
+    const accepted = await supervisor.run(probe, args, options);
+    assert.equal(accepted.status, 4);
+    assert.equal(accepted.failure, null);
+    assert.equal(decoder.decode(accepted.stdout), "PLAN ONLY: no proof was checked\n");
+    expectFailure(await supervisor.run(probe, [...args, "-layout", "extra"], options), "input-limit");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a trapped child supersedes the upstream-style rejection through the supervisor", async () => {
+  const result = await new NodeSupervisor().run(probe, ["-key", "child-trap"]);
+  expectFailure(result, "trap");
 });
 
 test("an error releasing the call's input suppresses an otherwise complete result", () => {
