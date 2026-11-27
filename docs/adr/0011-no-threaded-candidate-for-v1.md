@@ -19,7 +19,7 @@ Protocol: native `cp_verify` from the pinned source, compiled locally with Apple
 | 4 | 6.43 | 6.41 / 6.43 / 6.43 |
 | 16 | 6.29 | 6.28 / 6.30 / 6.29 |
 
-Threads save at most 20% of the native call here, a factor of 1.25, and almost all of it by `-j 4`. The candidates workflow measures the pinned g++ reference at `-j 1`, `2`, `4` and the runner's CPU count on x86_64 Linux and keeps the report. By comparison, the wide-arithmetic build halves the Wasmtime call with no new host surface (ADR 0010).
+Threads save at most 20% of the native call here, a factor of 1.25, and almost all of it by `-j 4`. The candidates workflow repeated the protocol with the pinned g++ reference on a GitHub-hosted ubuntu-24.04 virtual machine (Intel Xeon 6975P-C, 4 logical CPUs): 20.04 s at `-j 1` (20.04 / 20.06 / 19.90), 17.43 s at `-j 2` and 16.42 s at `-j 4` (16.42 / 16.44 / 16.37), a factor of 1.22. Every call exited 0. By comparison, the wide-arithmetic build halves the Wasmtime call with no new host surface (ADR 0010).
 
 ## Decision
 
