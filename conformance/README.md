@@ -24,6 +24,8 @@ CI retains `build/conformance-m1.json` and `build/conformance-node.json` even wh
 
 On x86_64 Linux, `make memory-probe` measures both full-size published whole calls at `-j 1`. The bounded Wasmtime measurement adapter compares each call's closing record against native and checks refusal under a smaller request cap. The report separates per-process native RSS, guest linear pages and Wasmtime host mappings. [Memory measurement protocol](../docs/adr/0006-full-size-memory-envelope.md)
 
+`make test` runs the host contracts and C7 failure injections. The tests use the real supervisor, process shims and guest memory. They cover input and output caps, failed growth and allocation, deadline completion, worker loss and trap precedence. The scoped aggregate check runs on supported Linux hosts. Run `make c7-test` on x86_64 Linux for the full suite, including native comparison of a truncated proof, a malformed key exactly at the file limit and ordinary input precedence. A key one byte above the limit returns the exact host refusal.
+
 - `excluded-fields.txt` lists the approved timing and thread-count anchors and their reasons. `make comparator-test` checks those boundaries without building the verifier.
 - `regressions/` (from M2): every input that once broke R-EQ-1 or R-EQ-2, with its provenance, kept forever
 

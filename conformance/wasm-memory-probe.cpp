@@ -11,8 +11,21 @@ static int try_grow(intptr_t bytes) {
   return sbrk(bytes) == reinterpret_cast<void *>(-1) ? 2 : 0;
 }
 
+static bool read_one(const char *path) {
+  auto *file = std::fopen(path, "rb");
+  if (!file) return false;
+  const bool got_byte = std::fgetc(file) != EOF;
+  return std::fclose(file) == 0 && got_byte;
+}
+
 int main(int argc, char **argv) {
   if (argc < 3) return 2;
+  if (!std::strcmp(argv[2], "request")) {
+    if ((argc != 6 && argc != 8) || !read_one(argv[3]) || !read_one(argv[4])) return 2;
+    if (argc == 8 && !read_one(argv[7])) return 2;
+    std::puts("PLAN ONLY: no proof was checked");
+    return 4;
+  }
   if (!std::strcmp(argv[2], "spin")) {
     volatile unsigned iterations = 0;
     for (;;) iterations = iterations + 1;
@@ -42,7 +55,8 @@ int main(int argc, char **argv) {
   }
   const bool bad_wait = !std::strcmp(argv[2], "bad-wait-pointer");
   const bool rejected = !std::strcmp(argv[2], "rejected");
-  if (bad_wait || rejected || !std::strcmp(argv[2], "child")) {
+  const bool child_trap = !std::strcmp(argv[2], "child-trap");
+  if (bad_wait || rejected || child_trap || !std::strcmp(argv[2], "child")) {
     if (rejected && argc != 5) return 2;
     int fds[2];
     if (pipe(fds)) return 2;
@@ -56,6 +70,12 @@ int main(int argc, char **argv) {
         std::printf("NO: rejected-stage-text %s %s\n", argv[3], argv[4]);
         std::fprintf(stderr, "stage stderr\n");
         return 1;
+      }
+      if (child_trap) {
+        std::puts("YES");
+        std::fflush(stdout);
+        std::fputs("unpublished child stderr\n", stderr);
+        __builtin_trap();
       }
       return try_grow(65536) == 0 ? 3 : 2;
     }

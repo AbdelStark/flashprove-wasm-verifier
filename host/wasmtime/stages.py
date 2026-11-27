@@ -18,7 +18,7 @@ PORT = "fpv_port"
 FAILED = b"NOT CHECKED: internal-stage\n"
 PIPE_TYPE = 0  # Preview 1 has no dedicated pipe file type.
 MAX_PAGES = 57344
-PARENT_PAGES = 2048
+PARENT_PAGES = 9216
 _active = Lock()  # Wasmtime's Python callbacks share exception state within the process.
 
 
